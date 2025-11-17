@@ -140,14 +140,34 @@ typedef enum {
 	UP_DEVICE_BATTERY_CHARGE_THRESHOLD_LAST,
 } UpDeviceBatteryChargeThresholdSettings;
 
-const gchar	*up_device_kind_to_string		(UpDeviceKind		 type_enum);
-const gchar	*up_device_state_to_string		(UpDeviceState		 state_enum);
-const gchar	*up_device_technology_to_string		(UpDeviceTechnology	 technology_enum);
-const gchar	*up_device_level_to_string		(UpDeviceLevel		 level_enum);
-UpDeviceKind	 up_device_kind_from_string		(const gchar		*type);
-UpDeviceState	 up_device_state_from_string		(const gchar		*state);
-UpDeviceTechnology up_device_technology_from_string	(const gchar		*technology);
-UpDeviceLevel	 up_device_level_from_string		(const gchar		*level);
+/**
+ * UpDeviceChargeStrategies:
+ *
+ * The battery charging algorithm.
+ **/
+typedef enum {
+	UP_DEVICE_CHARGE_STRATEGIES_NONE = 0,
+	UP_DEVICE_CHARGE_STRATEGIES_UNKNOWN = 1 << 0,
+	UP_DEVICE_CHARGE_STRATEGIES_NA = 1 << 1,
+	UP_DEVICE_CHARGE_STRATEGIES_TRICKLE = 1 << 2,
+	UP_DEVICE_CHARGE_STRATEGIES_FAST = 1 << 3,
+	UP_DEVICE_CHARGE_STRATEGIES_STANDARD = 1 << 4,
+	UP_DEVICE_CHARGE_STRATEGIES_ADAPTIVE = 1 << 5,
+	UP_DEVICE_CHARGE_STRATEGIES_CUSTOM = 1 << 6,
+	UP_DEVICE_CHARGE_STRATEGIES_LONG_LIFE = 1 << 7,
+	UP_DEVICE_CHARGE_STRATEGIES_BYPASS = 1 << 8
+} UpDeviceChargeStrategies;
+
+const gchar	*up_device_kind_to_string		(UpDeviceKind			 type_enum);
+const gchar	*up_device_state_to_string		(UpDeviceState			 state_enum);
+const gchar	*up_device_technology_to_string		(UpDeviceTechnology		 technology_enum);
+const gchar	*up_device_level_to_string		(UpDeviceLevel			 level_enum);
+const gchar	*up_device_charge_strategy_to_str	(UpDeviceChargeStrategies	 charge_type_enum);
+UpDeviceChargeStrategies up_device_battery_charge_strategy_from_string (const gchar *strategy);
+UpDeviceKind	 up_device_kind_from_string		(const gchar			*type);
+UpDeviceState	 up_device_state_from_string		(const gchar			*state);
+UpDeviceTechnology up_device_technology_from_string	(const gchar			*technology);
+UpDeviceLevel	 up_device_level_from_string		(const gchar			*level);
 
 G_END_DECLS
 

@@ -371,3 +371,76 @@ up_device_level_from_string (const gchar *level)
 		return UP_DEVICE_LEVEL_FULL;
 	return UP_DEVICE_LEVEL_UNKNOWN;
 }
+
+/**
+ * up_device_charge_strategy_to_str:
+ *
+ * Converts a #UpDeviceChargeStrategies to a string.
+ *
+ * Return value: identifier string
+ *
+ * Since: 1.91.5
+ **/
+const gchar *
+up_device_charge_strategy_to_str (UpDeviceChargeStrategies strategy)
+{
+	if (strategy == UP_DEVICE_CHARGE_STRATEGIES_UNKNOWN)
+		return "Unknown";
+	if (strategy == UP_DEVICE_CHARGE_STRATEGIES_NA)
+		return "N/A";
+	if (strategy == UP_DEVICE_CHARGE_STRATEGIES_TRICKLE)
+		return "Trickle";
+	if (strategy == UP_DEVICE_CHARGE_STRATEGIES_FAST)
+		return "Fast";
+	if (strategy == UP_DEVICE_CHARGE_STRATEGIES_STANDARD)
+		return "Standard";
+	if (strategy == UP_DEVICE_CHARGE_STRATEGIES_ADAPTIVE)
+		return "Adaptive";
+	if (strategy == UP_DEVICE_CHARGE_STRATEGIES_CUSTOM)
+		return "Custom";
+	if (strategy == UP_DEVICE_CHARGE_STRATEGIES_LONG_LIFE)
+		return "Long Life";
+	if (strategy == UP_DEVICE_CHARGE_STRATEGIES_BYPASS)
+		return "Bypass";
+
+	/* invalid type */
+	return "Unknown";
+}
+
+/**
+ * up_device_battery_charge_strategy_from_string:
+ *
+ * Converts a string to #UpDeviceChargeStrategies.
+ *
+ * Return value: enumerated value
+ *
+ * Since: 1.91.5
+ **/
+UpDeviceChargeStrategies
+up_device_battery_charge_strategy_from_string (const gchar *strategy)
+{
+	if (strategy == NULL)
+		return UP_DEVICE_CHARGE_STRATEGIES_UNKNOWN;
+
+	if (g_str_equal (strategy, "Unknown"))
+		return UP_DEVICE_CHARGE_STRATEGIES_UNKNOWN;
+	if (g_str_equal (strategy, "N/A"))
+		return UP_DEVICE_CHARGE_STRATEGIES_NA;
+	if (g_str_equal (strategy, "Trickle"))
+		return UP_DEVICE_CHARGE_STRATEGIES_TRICKLE;
+	if (g_str_equal (strategy, "Fast"))
+		return UP_DEVICE_CHARGE_STRATEGIES_FAST;
+	if (g_str_equal (strategy, "Standard"))
+		return UP_DEVICE_CHARGE_STRATEGIES_STANDARD;
+	if (g_str_equal (strategy, "Adaptive"))
+		return UP_DEVICE_CHARGE_STRATEGIES_ADAPTIVE;
+	if (g_str_equal (strategy, "Custom"))
+		return UP_DEVICE_CHARGE_STRATEGIES_CUSTOM;
+	if (g_str_equal (strategy, "Long Life"))
+		return UP_DEVICE_CHARGE_STRATEGIES_LONG_LIFE;
+	if (g_str_equal (strategy, "Bypass"))
+		return UP_DEVICE_CHARGE_STRATEGIES_BYPASS;
+
+	/* invalid type */
+	return 0;
+}
