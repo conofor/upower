@@ -65,6 +65,7 @@ typedef struct {
 	gdouble voltage;
 	gdouble temperature;
 	gchar *capacity_level;
+	UpDeviceChargeStrategies charge_strategy;
 } UpBatteryValues;
 
 typedef struct {

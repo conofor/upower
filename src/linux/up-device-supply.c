@@ -111,6 +111,7 @@ up_device_supply_reset_values (UpDeviceSupply *supply)
 		      "charge-end-threshold", 100,
 		      "charge-threshold-enabled", FALSE,
 		      "charge-threshold-supported", FALSE,
+		      "charge-strategy", UP_DEVICE_CHARGE_STRATEGIES_UNKNOWN,
 		      NULL);
 }
 

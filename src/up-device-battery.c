@@ -406,6 +406,7 @@ up_device_battery_report (UpDeviceBattery *self,
 		      "time-to-empty", time_to_empty,
 		      "time-to-full", time_to_full,
 		      "capacity-level", values->capacity_level,
+		      "charge-strategy", values->charge_strategy,
 		      /* XXX: Move "update-time" updates elsewhere? */
 		      "update-time", (guint64) g_get_real_time () / G_USEC_PER_SEC,
 		      NULL);
@@ -631,6 +632,7 @@ up_device_battery_update_info (UpDeviceBattery *self, UpBatteryInfo *info)
 			      "charge-threshold-enabled", FALSE,
 			      "charge-threshold-supported", FALSE,
 			      "charge-threshold-settings-supported", 0,
+			      "charge-strategy", UP_DEVICE_CHARGE_STRATEGIES_UNKNOWN,
 			      "voltage-min-design", (gdouble) 0.0,
 			      "voltage-max-design", (gdouble) 0.0,
 			      "capacity-level", NULL,
@@ -712,6 +714,8 @@ up_device_battery_set_charge_threshold (UpExportedDevice *skeleton,
 		ret = up_device_battery_set_charge_thresholds (self, charge_start_threshold, charge_end_threshold, &error);
 	else
 		ret = up_device_battery_set_charge_thresholds (self, 0, 100, &error);
+
+	up_device_refresh_internal (device, UP_REFRESH_EVENT);
 
 	if (!ret) {
 		g_dbus_method_invocation_return_error (invocation,

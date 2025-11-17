@@ -250,6 +250,7 @@ up_device_battery_charge_type_str_to_enum (const gchar *type)
 	return 0;
 }
 
+
 static UpDeviceChargeStrategies
 up_device_battery_charge_find_available_charge_types_for_charging (UpDevice *device) {
 	UpDeviceSupplyBattery *self = UP_DEVICE_SUPPLY_BATTERY (device);
@@ -268,7 +269,7 @@ up_device_battery_charge_find_available_charge_types_for_charging (UpDevice *dev
 }
 
 static void
-up_device_battery_get_supported_charge_types (UpDevice *device, UpBatteryInfo *info)
+up_device_battery_get_supported_charge_types (UpDevice *device, UpBatteryInfo *info, UpBatteryValues *values)
 {
 	UpDeviceSupplyBattery *self = UP_DEVICE_SUPPLY_BATTERY (device);
 	GUdevDevice *native;
@@ -278,7 +279,7 @@ up_device_battery_get_supported_charge_types (UpDevice *device, UpBatteryInfo *i
 
 	native = G_UDEV_DEVICE (up_device_get_native (device));
 
-	charge_type_str = g_udev_device_get_sysfs_attr (native, "charge_types");
+	charge_type_str = g_udev_device_get_sysfs_attr_uncached (native, "charge_types");
 
 	if (charge_type_str == NULL)
 		return;
@@ -290,6 +291,7 @@ up_device_battery_get_supported_charge_types (UpDevice *device, UpBatteryInfo *i
 		if (g_utf8_strchr (types[i], 1, '[') != NULL) {
 			tmp_type = remove_brackets (types[i]);
 			self->charge_strategy = up_device_battery_charge_type_str_to_enum (tmp_type);
+			values->charge_strategy = self->charge_strategy;
 		} else {
 			tmp_type = g_strdup (types[i]);
 		}
@@ -405,7 +407,7 @@ up_device_supply_battery_refresh (UpDevice *device,
 	}
 
 	/* refresh the changes of charge_types */
-	up_device_battery_get_supported_charge_types (device, &info);
+	up_device_battery_get_supported_charge_types (device, &info, &values);
 
 	/* Test charge_types attribute, if "Long_Life", "Standard", "Adaptive" or "Fast" are found,
 	 * then set charge_control_supported to TRUE.
