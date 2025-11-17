@@ -921,6 +921,42 @@ method return sender=:1.386 -> dest=:1.477 reply_serial=2
         </doc:description>
       </doc:doc>
     </property>
+    <property name="ChargeStrategy" type="u" access="read">
+      <doc:doc>
+        <doc:description>
+          <doc:para>The current charging strategy for the battery.</doc:para>
+          <doc:list>
+            <doc:item>
+              <doc:term>1</doc:term><doc:definition>Unknown. The battery charging behavior is unknown or not supported.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>2</doc:term><doc:definition>N/A. The battery charging behavior is not supported.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>4</doc:term><doc:definition>Trickle. The battery charges slowly.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>8</doc:term><doc:definition>Fast. Quickly charge the battery using fast-charge technology</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>16</doc:term><doc:definition>Standard. Fully charge the battery with a moderate rate.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>32</doc:term><doc:definition>Adaptive. The battery charges at a rate that adapts to the battery's capacity which the system firmware controls.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>64</doc:term><doc:definition>Custom. The battery charges at a rate that is set by the user.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>128</doc:term><doc:definition>Long-life. The charger reduces its charging rate in order to prolong the battery health</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>256</doc:term><doc:definition>Bypass. Bypass the charge path around the integrated charger. A external charger is used instead to manage the charging</doc:definition>
+            </doc:item>
+          </doc:list>
+        </doc:description>
+      </doc:doc>
+    </property>
     <property name="VoltageMinDesign" type="d" access="read">
       <doc:doc>
         <doc:description>
