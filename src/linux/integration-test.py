@@ -354,6 +354,32 @@ class Tests(dbusmock.DBusTestCase):
             None,
         )
 
+    def get_charge_strategies(self, device):
+        return self.dbus.call_sync(
+            UP,
+            device,
+            "org.freedesktop.UPower.Device",
+            "GetSupportedChargeStrategies",
+            None,
+            None,
+            Gio.DBusCallFlags.NO_AUTO_START,
+            -1,
+            None,
+        ).unpack()[0]
+
+    def set_charge_strategy(self, device, strategy):
+        self.dbus.call_sync(
+            UP,
+            device,
+            "org.freedesktop.UPower.Device",
+            "SetChargeStrategy",
+            GLib.Variant("s", strategy),
+            None,
+            Gio.DBusCallFlags.NO_AUTO_START,
+            -1,
+            None,
+        )
+
     def get_kbd_backlight_brightness(self, kbd_backlight):
         return self.dbus.call_sync(
             UP,
@@ -2936,6 +2962,59 @@ class Tests(dbusmock.DBusTestCase):
         ex = cm.exception
         self.assertIn("setting battery charge thresholds", str(ex))
 
+        self.stop_daemon()
+
+    def test_battery_charge_strategy_supported(self):
+        """Battery with charge_strategy supported"""
+
+        bat0 = self.testbed.add_device(
+            "power_supply",
+            "BAT1",
+            None,
+            [
+                "type",
+                "Battery",
+                "present",
+                "1",
+                "status",
+                "unknown",
+                "energy_full",
+                "60000000",
+                "energy_full_design",
+                "80000000",
+                "energy_now",
+                "48000000",
+                "voltage_now",
+                "12000000",
+                "charge_control_start_threshold",
+                "0",
+                "charge_control_end_threshold",
+                "100",
+                "charge_types",
+                "Standard [Long_Life] Fast Adaptive",
+            ],
+            [],
+        )
+
+        self.start_daemon()
+        devs = self.proxy.EnumerateDevices()
+        self.assertEqual(len(devs), 1)
+        bat0_up = devs[0]
+
+        self.assertEqual(
+            self.get_dbus_dev_property(bat0_up, "ChargeStrategy"), 128  # Long Life
+        )
+
+        self.assertEqual(
+            self.get_dbus_dev_property(bat0_up, "ChargeStrategiesSupported"),
+            184,  # 16 + 128 + 8 + 32
+        )
+
+        supported_strategies = self.get_charge_strategies(bat0_up)
+        self.assertEqual(
+            supported_strategies,
+            [("Fast",), ("Standard",), ("Adaptive",), ("Long Life",)],
+        )
         self.stop_daemon()
 
     def test_battery_zero_power_draw(self):
