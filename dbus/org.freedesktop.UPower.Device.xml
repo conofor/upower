@@ -154,6 +154,82 @@ method return sender=:1.386 -> dest=:1.477 reply_serial=2
     </method>
 
     <!-- ************************************************************ -->
+    <method name="GetSupportedChargeStrategies">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="strategies" direction="out" type="as">
+        <doc:doc>
+          <doc:summary>
+            The supported charge strategies for the power device.
+            <doc:list>
+              <doc:item>
+                <doc:term>Unknown</doc:term>
+                <doc:definition>
+                  The battery charging behavior is unknown or unsupported
+                </doc:definition>
+              </doc:item>
+              <doc:item>
+                <doc:term>N/A</doc:term>
+                <doc:definition>
+                  Battery charging is not supported.
+                </doc:definition>
+              </doc:item>
+              <doc:item>
+                <doc:term>Trickle</doc:term>
+                <doc:definition>
+                  The battery charges slowly.
+                </doc:definition>
+              </doc:item>
+              <doc:item>
+                <doc:term>Fast</doc:term>
+                <doc:definition>
+                  Quickly charge the battery using fast-charge technology.
+                </doc:definition>
+              </doc:item>
+              <doc:item>
+                <doc:term>Standard</doc:term>
+                <doc:definition>
+                  Fully charge the battery with a moderate speed.
+                </doc:definition>
+              </doc:item>
+              <doc:item>
+                <doc:term>Adaptive</doc:term>
+                <doc:definition>
+                  The battery's charging speed is automatically adjusted by the firmware based on its capacity.
+                </doc:definition>
+              </doc:item>
+              <doc:item>
+                <doc:term>Custom</doc:term>
+                <doc:definition>
+                  The user determines the charging speed.
+                </doc:definition>
+              </doc:item>
+              <doc:item>
+                <doc:term>Long Life</doc:term>
+                <doc:definition>
+                  Charging speed is reduced to optimize battery longevity.
+                </doc:definition>
+              </doc:item>
+              <doc:item>
+                <doc:term>Bypass</doc:term>
+                <doc:definition>
+                  The integrated charger is bypassed, delegating charge management to an external unit.
+                </doc:definition>
+              </doc:item>
+            </doc:list>
+          </doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>
+            Get the supported charge strategies for the power device. The supported
+            charge strategies are reported by the system firmware if they are available.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <!-- ************************************************************ -->
     <method name="GetHistory">
       <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
       <arg name="type" direction="in" type="s">
@@ -954,6 +1030,44 @@ method return sender=:1.386 -> dest=:1.477 reply_serial=2
               <doc:term>256</doc:term><doc:definition>Bypass. Bypass the charge path around the integrated charger. A external charger is used instead to manage the charging</doc:definition>
             </doc:item>
           </doc:list>
+        </doc:description>
+      </doc:doc>
+    </property>
+    <property name="ChargeStrategiesSupported" type="u" access="read">
+      <doc:doc>
+        <doc:description>
+          <doc:para>The supported charge strategies for the battery in bit mask format.</doc:para>
+          <doc:list>
+            <doc:item>
+              <doc:term>Bit 0</doc:term><doc:definition>Unknown. The battery charging behavior is unknown or unsupported.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Bit 1</doc:term><doc:definition>N/A. Battery charging is not supported.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Bit 2</doc:term><doc:definition>Trickle. The battery charges slowly.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Bit 3</doc:term><doc:definition>Fast. Quickly charge the battery using fast-charge technology</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Bit 4</doc:term><doc:definition>Standard. Fully charge the battery with a moderate speed.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Bit 5</doc:term><doc:definition>Adaptive. The battery's charging speed is automatically adjusted by the firmware based on its capacity.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Bit 6</doc:term><doc:definition>Custom. The user determines the charging speed.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Bit 7</doc:term><doc:definition>Long life. Charging speed is reduced to optimize battery longevity.</doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Bit 8</doc:term><doc:definition>Bypass. The integrated charger is bypassed, delegating charge management to an external unit.</doc:definition>
+            </doc:item>
+          </doc:list>
+          <doc:para>Examples:</doc:para>
+          <doc:para>If the system supports standard and long-life charge strategies, the value is 144.</doc:para>
         </doc:description>
       </doc:doc>
     </property>
