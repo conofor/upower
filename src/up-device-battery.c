@@ -553,6 +553,7 @@ up_device_battery_update_info (UpDeviceBattery *self, UpBatteryInfo *info)
 				      "charge-threshold-enabled", charge_threshold_enabled,
 				      "charge-threshold-supported", info->charge_control_supported,
 				      "charge-threshold-settings-supported", info->charge_threshold_settings,
+				      "charge-strategies-supported", info->charge_strategies_supported,
 				      "voltage-min-design", info->voltage_min_design,
 				      "voltage-max-design", info->voltage_max_design,
 			              NULL);
@@ -633,6 +634,7 @@ up_device_battery_update_info (UpDeviceBattery *self, UpBatteryInfo *info)
 			      "charge-threshold-supported", FALSE,
 			      "charge-threshold-settings-supported", 0,
 			      "charge-strategy", UP_DEVICE_CHARGE_STRATEGIES_UNKNOWN,
+			      "charge-strategies-supported", 0,
 			      "voltage-min-design", (gdouble) 0.0,
 			      "voltage-max-design", (gdouble) 0.0,
 			      "capacity-level", NULL,
@@ -733,6 +735,69 @@ up_device_battery_set_charge_threshold (UpExportedDevice *skeleton,
 	return TRUE;
 }
 
+/**
+ * up_device_battery_get_supported_charge_strategies:
+ **/
+ static gboolean
+ up_device_battery_get_supported_charge_strategies (UpExportedDevice *skeleton,
+						    GDBusMethodInvocation *invocation,
+						    UpDeviceBattery *self)
+{
+	UpDeviceChargeStrategies charge_strategies_supported;
+	g_autoptr (GStrvBuilder) strv_builder = g_strv_builder_new ();
+	g_auto (GStrv) array = NULL;
+	UpDevice *device = UP_DEVICE (self);
+
+	if (device == NULL) {
+		g_dbus_method_invocation_return_error (invocation,
+						       UP_DAEMON_ERROR, UP_DAEMON_ERROR_GENERAL,
+						       "Error on getting device");
+		return FALSE;
+	}
+
+	g_object_get (self,
+		      "charge-strategies-supported", &charge_strategies_supported,
+		      NULL);
+
+	if (charge_strategies_supported == 0) {
+		g_strv_builder_add (strv_builder, "Unknown");
+	} else {
+		if (charge_strategies_supported & UP_DEVICE_CHARGE_STRATEGIES_UNKNOWN)
+			g_strv_builder_add (strv_builder,
+					    up_device_charge_strategy_to_str (UP_DEVICE_CHARGE_STRATEGIES_UNKNOWN));
+		if (charge_strategies_supported & UP_DEVICE_CHARGE_STRATEGIES_NA)
+			g_strv_builder_add (strv_builder,
+					    up_device_charge_strategy_to_str (UP_DEVICE_CHARGE_STRATEGIES_NA));
+		if (charge_strategies_supported & UP_DEVICE_CHARGE_STRATEGIES_TRICKLE)
+			g_strv_builder_add (strv_builder,
+					    up_device_charge_strategy_to_str (UP_DEVICE_CHARGE_STRATEGIES_TRICKLE));
+		if (charge_strategies_supported & UP_DEVICE_CHARGE_STRATEGIES_FAST)
+			g_strv_builder_add (strv_builder,
+					    up_device_charge_strategy_to_str (UP_DEVICE_CHARGE_STRATEGIES_FAST));
+		if (charge_strategies_supported & UP_DEVICE_CHARGE_STRATEGIES_STANDARD)
+			g_strv_builder_add (strv_builder,
+					    up_device_charge_strategy_to_str (UP_DEVICE_CHARGE_STRATEGIES_STANDARD));
+		if (charge_strategies_supported & UP_DEVICE_CHARGE_STRATEGIES_ADAPTIVE)
+			g_strv_builder_add (strv_builder,
+					    up_device_charge_strategy_to_str (UP_DEVICE_CHARGE_STRATEGIES_ADAPTIVE));
+		if (charge_strategies_supported & UP_DEVICE_CHARGE_STRATEGIES_CUSTOM)
+			g_strv_builder_add (strv_builder,
+					    up_device_charge_strategy_to_str (UP_DEVICE_CHARGE_STRATEGIES_CUSTOM));
+		if (charge_strategies_supported & UP_DEVICE_CHARGE_STRATEGIES_LONG_LIFE)
+			g_strv_builder_add (strv_builder,
+					    up_device_charge_strategy_to_str (UP_DEVICE_CHARGE_STRATEGIES_LONG_LIFE));
+		if (charge_strategies_supported & UP_DEVICE_CHARGE_STRATEGIES_BYPASS)
+			g_strv_builder_add (strv_builder,
+					    up_device_charge_strategy_to_str (UP_DEVICE_CHARGE_STRATEGIES_BYPASS));
+
+	}
+	array = g_strv_builder_end (strv_builder);
+
+	up_exported_device_complete_get_supported_charge_strategies (skeleton, invocation, (const gchar * const*) array);
+
+	return TRUE;
+}
+
 static void
 up_device_battery_init (UpDeviceBattery *self)
 {
@@ -744,6 +809,9 @@ up_device_battery_init (UpDeviceBattery *self)
 
 	g_signal_connect (self, "handle-enable-charge-threshold",
 			  G_CALLBACK (up_device_battery_set_charge_threshold), self);
+
+	g_signal_connect (self, "handle-get-supported-charge-strategies",
+			  G_CALLBACK (up_device_battery_get_supported_charge_strategies), self);
 }
 
 static void

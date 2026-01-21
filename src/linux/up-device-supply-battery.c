@@ -298,6 +298,8 @@ up_device_battery_get_supported_charge_types (UpDevice *device, UpBatteryInfo *i
 		self->supported_charge_types |= up_device_battery_charge_type_str_to_enum (tmp_type);
 		g_free (tmp_type);
 	}
+
+	info->charge_strategies_supported = self->supported_charge_types;
 }
 
 /**
@@ -611,7 +613,7 @@ up_device_supply_battery_set_battery_charge_types (UpDevice *device,
 
 	native = G_UDEV_DEVICE (up_device_get_native (device));
 
-	charge_type_str = up_device_charge_strategies_to_str (charge_type);
+	charge_type_str = up_device_charge_strategy_to_str (charge_type);
 
 	/* return, if the attribute "charge_types" is not found */
 	if (!g_udev_device_has_sysfs_attr (native, "charge_types"))

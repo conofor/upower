@@ -100,6 +100,7 @@ typedef struct {
 	guint charge_control_start_threshold;
 	guint charge_control_end_threshold;
 	guint charge_threshold_settings;
+	UpDeviceChargeStrategies charge_strategies_supported;
 } UpBatteryInfo;
 
 
