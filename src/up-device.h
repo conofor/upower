@@ -69,7 +69,8 @@ gboolean	 up_device_get_online		(UpDevice	*device,
 						 gboolean	*online);
 const gchar	*up_device_get_state_dir_override (UpDevice *device);
 gboolean	 up_device_polkit_is_allowed	(UpDevice	*device,
-						 GDBusMethodInvocation *invocation);
+						 GDBusMethodInvocation *invocation,
+						 const gchar *action_id);
 void		 up_device_sibling_discovered	(UpDevice	*device,
 						 GObject	*sibling);
 gboolean	 up_device_refresh_internal	(UpDevice	*device,

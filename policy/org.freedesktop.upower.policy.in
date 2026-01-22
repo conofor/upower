@@ -29,4 +29,12 @@ file are instantly applied.
     </defaults>
   </action>
 
+  <action id="org.freedesktop.UPower.set-charge-strategy">
+    <description>Change the battery charging strategy</description>
+    <message>Authentication is required to set battery charging strategy.</message>
+    <defaults>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
 </policyconfig>

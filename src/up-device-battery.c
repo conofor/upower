@@ -683,7 +683,7 @@ up_device_battery_set_charge_threshold (UpExportedDevice *skeleton,
 		return FALSE;
 	}
 
-	if (!up_device_polkit_is_allowed (device, invocation)) {
+	if (!up_device_polkit_is_allowed (device, invocation, "org.freedesktop.UPower.enable-charging-limit")) {
 		g_dbus_method_invocation_return_error (invocation,
 						       UP_DAEMON_ERROR, UP_DAEMON_ERROR_GENERAL,
 						       "Operation is not allowed.");
@@ -819,6 +819,13 @@ up_device_battery_set_charge_strategy (UpExportedDevice *skeleton,
 						       UP_DAEMON_ERROR, UP_DAEMON_ERROR_GENERAL,
 						       "Error on getting device");
 		return FALSE;
+	}
+
+	if (!up_device_polkit_is_allowed (device, invocation, "org.freedesktop.UPower.set-charge-strategy")) {
+		g_dbus_method_invocation_return_error (invocation,
+						       UP_DAEMON_ERROR, UP_DAEMON_ERROR_GENERAL,
+						       "Operation is not allowed.");
+		return TRUE;
 	}
 
 	charge_strategy = up_device_battery_charge_strategy_from_string (strategy);

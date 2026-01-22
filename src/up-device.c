@@ -407,12 +407,14 @@ up_device_get_daemon (UpDevice *device)
  * up_device_polkit_is_allowed
  **/
 gboolean
-up_device_polkit_is_allowed (UpDevice *device, GDBusMethodInvocation *invocation)
+up_device_polkit_is_allowed (UpDevice *device, GDBusMethodInvocation *invocation, const gchar *action_id)
 {
 	UpDevicePrivate *priv = up_device_get_instance_private (device);
+	g_return_val_if_fail (UP_IS_DEVICE (device), FALSE);
+	g_return_val_if_fail (action_id != NULL, FALSE);
 
 	if (!up_daemon_polkit_is_allowed (priv->daemon,
-					  "org.freedesktop.UPower.enable-charging-limit",
+					  action_id,
 					  invocation))
 		return FALSE;
 
