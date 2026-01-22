@@ -373,7 +373,7 @@ class Tests(dbusmock.DBusTestCase):
             device,
             "org.freedesktop.UPower.Device",
             "SetChargeStrategy",
-            GLib.Variant("s", strategy),
+            GLib.Variant("(s)", (strategy,)),
             None,
             Gio.DBusCallFlags.NO_AUTO_START,
             -1,
@@ -3013,8 +3013,62 @@ class Tests(dbusmock.DBusTestCase):
         supported_strategies = self.get_charge_strategies(bat0_up)
         self.assertEqual(
             supported_strategies,
-            [("Fast",), ("Standard",), ("Adaptive",), ("Long Life",)],
+            ["Fast", "Standard", "Adaptive", "Long Life"],
         )
+        self.stop_daemon()
+
+    def test_set_battery_charge_strategy(self):
+        """Set battery charge strategy"""
+
+        if not self.polkit:
+            self.start_polkitd({})
+        self.polkit_obj.SetAllowed(["org.freedesktop.UPower.set-charge-strategy"])
+
+        bat0 = self.testbed.add_device(
+            "power_supply",
+            "BAT1",
+            None,
+            [
+                "type",
+                "Battery",
+                "present",
+                "1",
+                "status",
+                "unknown",
+                "energy_full",
+                "60000000",
+                "energy_full_design",
+                "80000000",
+                "energy_now",
+                "48000000",
+                "voltage_now",
+                "12000000",
+                "charge_control_start_threshold",
+                "0",
+                "charge_control_end_threshold",
+                "100",
+                "charge_types",
+                "Standard [Long_Life] Fast Adaptive",
+            ],
+            [],
+        )
+
+        self.start_daemon()
+        devs = self.proxy.EnumerateDevices()
+        self.assertEqual(len(devs), 1)
+        bat0_up = devs[0]
+
+        self.assertEqual(
+            self.get_dbus_dev_property(bat0_up, "ChargeStrategy"), 128  # Long Life
+        )
+
+        self.set_charge_strategy(bat0_up, "Fast")
+        # it is a hack for umockdev, the configured value should be "[Fast]" but
+        # umockdev writes "Fast"
+        battery_name = bat0_up.split("_")[-1]
+        with open(f"/sys/class/power_supply/{battery_name}/charge_types") as fp:
+            self.assertEqual(fp.read(), "Fast")
+
         self.stop_daemon()
 
     def test_battery_zero_power_draw(self):
