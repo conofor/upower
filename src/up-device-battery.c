@@ -798,6 +798,66 @@ up_device_battery_set_charge_threshold (UpExportedDevice *skeleton,
 	return TRUE;
 }
 
+/**
+ * up_device_battery_set_charge_strategy:
+ **/
+static gboolean
+up_device_battery_set_charge_strategy (UpExportedDevice *skeleton,
+				       GDBusMethodInvocation *invocation,
+				       const gchar *strategy,
+				       UpDeviceBattery *self)
+{
+	gboolean ret = FALSE;
+	UpDeviceChargeStrategies charge_strategy = 0;
+	UpDeviceChargeStrategies charge_strategies_supported = 0;
+	UpDevice *device = UP_DEVICE (self);
+	UpDeviceBatteryClass *klass = UP_DEVICE_BATTERY_GET_CLASS (self);
+	g_autoptr (GError) error = NULL;
+
+	if (device == NULL) {
+		g_dbus_method_invocation_return_error (invocation,
+						       UP_DAEMON_ERROR, UP_DAEMON_ERROR_GENERAL,
+						       "Error on getting device");
+		return FALSE;
+	}
+
+	charge_strategy = up_device_battery_charge_strategy_from_string (strategy);
+
+	g_object_get (self,
+		"charge-strategies-supported",
+		&charge_strategies_supported,
+		NULL);
+
+	if (charge_strategy == 0 ||
+	    !(charge_strategies_supported & charge_strategy)) {
+		g_dbus_method_invocation_return_error (invocation,
+						       UP_DAEMON_ERROR, UP_DAEMON_ERROR_NOT_SUPPORTED,
+						       "invalid charging strategy: %s", strategy ? strategy : "NULL");
+		return TRUE;
+	}
+
+	if (klass->set_battery_charge_strategy == NULL) {
+		g_dbus_method_invocation_return_error (invocation,
+						       UP_DAEMON_ERROR, UP_DAEMON_ERROR_NOT_SUPPORTED,
+						       "setting charging strategy is not supported by this backend");
+		return TRUE;
+	}
+
+	ret = klass->set_battery_charge_strategy (device, charge_strategy, &error);
+	if (!ret) {
+		g_dbus_method_invocation_return_error (invocation,
+						       UP_DAEMON_ERROR, UP_DAEMON_ERROR_GENERAL,
+						       "failed on setting charging strategy: %s", error->message);
+		return TRUE;
+	}
+
+	up_device_refresh_internal (device, UP_REFRESH_EVENT);
+
+	up_exported_device_complete_set_charge_strategy (skeleton, invocation);
+
+	return TRUE;
+}
+
 static void
 up_device_battery_init (UpDeviceBattery *self)
 {
@@ -812,6 +872,9 @@ up_device_battery_init (UpDeviceBattery *self)
 
 	g_signal_connect (self, "handle-get-supported-charge-strategies",
 			  G_CALLBACK (up_device_battery_get_supported_charge_strategies), self);
+
+	g_signal_connect (self, "handle-set-charge-strategy",
+			  G_CALLBACK (up_device_battery_set_charge_strategy), self);
 }
 
 static void

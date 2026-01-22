@@ -250,6 +250,31 @@ up_device_battery_charge_type_str_to_enum (const gchar *type)
 	return 0;
 }
 
+static gchar*
+up_device_battery_charge_type_to_string (UpDeviceChargeStrategies charge_type) {
+	if (charge_type == UP_DEVICE_CHARGE_STRATEGIES_UNKNOWN)
+		return "Unknown";
+	if (charge_type == UP_DEVICE_CHARGE_STRATEGIES_NA)
+		return "N/A";
+	if (charge_type == UP_DEVICE_CHARGE_STRATEGIES_TRICKLE)
+		return "Trickle";
+	if (charge_type == UP_DEVICE_CHARGE_STRATEGIES_FAST)
+		return "Fast";
+	if (charge_type == UP_DEVICE_CHARGE_STRATEGIES_STANDARD)
+		return "Standard";
+	if (charge_type == UP_DEVICE_CHARGE_STRATEGIES_ADAPTIVE)
+		return "Adaptive";
+	if (charge_type == UP_DEVICE_CHARGE_STRATEGIES_CUSTOM)
+		return "Custom";
+	if (charge_type == UP_DEVICE_CHARGE_STRATEGIES_LONG_LIFE)
+		return "Long_Life";
+	if (charge_type == UP_DEVICE_CHARGE_STRATEGIES_BYPASS)
+		return "Bypass";
+
+	/* invalid type */
+	return "Unknown";
+}
+
 
 static UpDeviceChargeStrategies
 up_device_battery_charge_find_available_charge_types_for_charging (UpDevice *device) {
@@ -607,13 +632,13 @@ up_device_supply_battery_set_battery_charge_types (UpDevice *device,
 						   UpDeviceChargeStrategies charge_type,
 						   GError **error) {
 	GUdevDevice *native;
-	g_autofree const gchar *charge_type_str = NULL;
+	const gchar *charge_type_str = NULL;
 	g_autofree gchar *native_path = NULL;
 	g_autofree gchar *type_filename = NULL;
 
 	native = G_UDEV_DEVICE (up_device_get_native (device));
 
-	charge_type_str = up_device_charge_strategy_to_str (charge_type);
+	charge_type_str = up_device_battery_charge_type_to_string (charge_type);
 
 	/* return, if the attribute "charge_types" is not found */
 	if (!g_udev_device_has_sysfs_attr (native, "charge_types"))
@@ -723,6 +748,7 @@ up_device_supply_battery_class_init (UpDeviceSupplyBatteryClass *klass)
 	device_class->coldplug = up_device_supply_coldplug;
 	device_class->refresh = up_device_supply_battery_refresh;
 	battery_class->set_battery_charge_thresholds = up_device_supply_battery_set_battery_charge_thresholds;
+	battery_class->set_battery_charge_strategy = up_device_supply_battery_set_battery_charge_types;
 
 	g_object_class_install_property (object_class, PROP_IGNORE_SYSTEM_PERCENTAGE,
 					 g_param_spec_boolean ("ignore-system-percentage",
