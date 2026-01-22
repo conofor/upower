@@ -230,6 +230,81 @@ method return sender=:1.386 -> dest=:1.477 reply_serial=2
     </method>
 
     <!-- ************************************************************ -->
+    <method name="SetChargeStrategy">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="strategy" direction="in" type="s">
+        <doc:doc>
+          <doc:summary>
+          Set the charging strategy for the battery device.
+          <doc:list>
+            <doc:item>
+              <doc:term>Unknown</doc:term>
+              <doc:definition>
+                The battery charging behavior is unknown or unsupported.
+              </doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>N/A</doc:term>
+              <doc:definition>
+                Battery charging is not supported.
+              </doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Trickle</doc:term>
+              <doc:definition>
+                The battery charges slowly.
+              </doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Fast</doc:term>
+              <doc:definition>
+                Quickly charge the battery using fast-charge technology.
+              </doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Standard</doc:term>
+              <doc:definition>
+                Fully charge the battery with a moderate speed.
+              </doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Adaptive</doc:term>
+              <doc:definition>
+                The battery's charging speed is automatically adjusted by the firmware based on its capacity.
+              </doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Custom</doc:term>
+              <doc:definition>
+                The user determines the charging rate.
+              </doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Long Life</doc:term>
+              <doc:definition>
+                Charging speed is reduced to optimize battery longevity.
+              </doc:definition>
+            </doc:item>
+            <doc:item>
+              <doc:term>Bypass</doc:term>
+              <doc:definition>
+                The integrated charger is bypassed, delegating charge management to an external unit.
+              </doc:definition>
+            </doc:item>
+          </doc:list>
+        </doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>
+            Set the charging strategy against the supported charge strategies. The supported charging strategies can be found by invoking the GetSupportedChargeStrategies method.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <!-- ************************************************************ -->
     <method name="GetHistory">
       <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
       <arg name="type" direction="in" type="s">
