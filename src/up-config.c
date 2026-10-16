@@ -320,6 +320,13 @@ up_config_init (UpConfig *config)
 				   " risky settings.");
 		}
 	}
+
+	if (!g_strcmp0 (critical_action, "Auto"))
+		g_warning ("The \"Auto\" CriticalPowerAction setting is deprecated, and may be risky. "
+			   "In many circumstances, it is equivalent to \"Suspend\". Abrupt power loss "
+			   "due to battery exhaustion may lead to data corruption! For backwards-compatibility "
+			   "reasons, upower will use it anyway. However, we highly recommend changing "
+			   "the setting to one of the supported values.");
 }
 
 /**

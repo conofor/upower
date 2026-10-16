@@ -589,8 +589,20 @@ up_backend_unplug (UpBackend *backend)
 }
 
 static gboolean
-check_action_result (GVariant *result)
+call_check_action_available (UpBackend *backend,
+			     const char *method)
 {
+	g_autoptr (GVariant) result = NULL;
+	const char *s;
+
+	result = g_dbus_proxy_call_sync (backend->priv->logind_proxy,
+					 method,
+					 NULL,
+					 G_DBUS_CALL_FLAGS_NONE,
+					 -1, NULL, NULL);
+	if (result == NULL)
+		return FALSE;
+
 	/* Note that systemd has a complicated list of values that it possibly
 	 * returns here. Normally, we should be checking for more than just "yes".
 	 *
@@ -601,15 +613,8 @@ check_action_result (GVariant *result)
 	 * A polkit prompt is dangerous, because the user might not be around to
 	 * immediately enter their password. In that case, we'd sit at the prompt
 	 * until the battery dies, effectively taking the "Ignore" action. */
-
-	if (result) {
-		const char *s;
-
-		g_variant_get (result, "(&s)", &s);
-		if (g_strcmp0 (s, "yes") == 0)
-			return TRUE;
-	}
-	return FALSE;
+	g_variant_get (result, "(&s)", &s);
+	return g_strcmp0 (s, "yes") == 0;
 }
 
 /**
@@ -622,66 +627,70 @@ check_action_result (GVariant *result)
 const char *
 up_backend_get_critical_action (UpBackend *backend)
 {
-	struct {
+	const struct {
 		const gchar *name;
 		const gchar *can_method;
 	} actions[] = {
-		/*
-		 * The fallback order is
-		 * Suspend -> HybridSleep -> Hibernate -> PowerOff -> Auto -> Ignore
-		 */
+		/* Defines the fallback order of our actions: we start at the
+		 * first instance of the configured action, and then make our
+		 * way down the list until we find our first available action. */
+
+		/* Backwards compat: Suspend falls through to HybridSleep, not Ignore */
 		{ "Suspend", "CanSuspend" },
-		{ "HybridSleep", "CanHybridSleep" },
-		{ "Hibernate", "CanHibernate" },
-		{ "PowerOff", "CanPowerOff" },
-		{ "Auto", "CanSleep"},
+
+		/* Primary fallback order */
+		{ "HybridSleep", "CanHybridSleep" }, /* fast resume + no data loss */
+		{ "Hibernate", "CanHibernate" }, /* no data loss but slow resume */
+		{ "PowerOff", "CanPowerOff" }, /* data loss but no fs corruption */
+		{ "Suspend", "CanSuspend" }, /* better than nothing... */
+		{ "Ignore", NULL }, /* give up */
+
+		/* Deprecated */
+		{ "Auto", "CanSleep" },
 		{ "Ignore", NULL },
 	};
+	const char* risky_actions[] = { "Suspend", "Ignore", NULL };
+
 	g_autofree gchar *action = NULL;
+	gboolean action_found = FALSE;
 	gboolean can_risky = FALSE;
-	guint i = 1;
+	guint i;
 
 	g_return_val_if_fail (backend->priv->logind_proxy != NULL, NULL);
 
-	can_risky = up_config_get_boolean (backend->priv->config,
-					   "AllowRiskyCriticalPowerAction");
-
-	/* find the configured action first */
+	/* Read & validate the configured action */
 	action = up_config_get_string (backend->priv->config, "CriticalPowerAction");
-
-	/* safeguard for the risky actions */
-	if (!can_risky) {
-		if (!g_strcmp0 (action, "Suspend") || !g_strcmp0 (action, "Ignore")) {
-			g_free (action);
-			action = g_strdup_printf ("HybridSleep");
+	if (action == NULL)
+		action = g_strdup ("HybridSleep");
+	for (i = 0; i < G_N_ELEMENTS (actions); i++) {
+		if (g_str_equal (actions[i].name, action)) {
+			action_found = TRUE;
+			break;
 		}
 	}
-
-	if (action != NULL) {
-		for (i = 0; i < G_N_ELEMENTS (actions); i++)
-			if (g_str_equal (actions[i].name, action))
-				break;
-		if (i >= G_N_ELEMENTS (actions))
-			i = 1;
+	if (!action_found) {
+		g_warning ("Unknown critical action %s, using HybridSleep", action);
+		g_set_str (&action, "HybridSleep");
 	}
 
+	/* Safeguard for risky actions */
+	can_risky = up_config_get_boolean (backend->priv->config, "AllowRiskyCriticalPowerAction");
+	if (!can_risky && g_strv_contains (risky_actions, action)) {
+		g_warning ("Critical action %s is risky, using HybridSleep instead", action);
+		g_set_str (&action, "HybridSleep");
+	}
+
+	/* Skip down to the configured action */
+	for (i = 0; i < G_N_ELEMENTS (actions); i++)
+		if (g_str_equal (actions[i].name, action))
+			break;
+
+	/* Return the first available action */
 	for (; i < G_N_ELEMENTS (actions); i++) {
-		GVariant *result;
-
-		if (actions[i].can_method) {
-			gboolean action_available;
-
-			/* Check whether we can use the method */
-			result = g_dbus_proxy_call_sync (backend->priv->logind_proxy,
-							 actions[i].can_method,
-							 NULL,
-							 G_DBUS_CALL_FLAGS_NONE,
-							 -1, NULL, NULL);
-			action_available = check_action_result (result);
-			g_variant_unref (result);
-
-			if (!action_available)
-				continue;
+		if (actions[i].can_method &&
+		    !call_check_action_available (backend, actions[i].can_method)) {
+			g_warning ("Critical action %s is unavailable, falling back", actions[i].name);
+			continue;
 		}
 
 		return actions[i].name;

@@ -3638,6 +3638,16 @@ class Tests(dbusmock.DBusTestCase):
         self.assertEqual(len(devs), 1)
         bat0_up = devs[0]
 
+        # check deprecation warning message when CriticalPowerAction=Auto
+        self.daemon_log.check_line(
+            'The "Auto" CriticalPowerAction setting is deprecated, and may be risky.'
+            ' In many circumstances, it is equivalent to "Suspend". Abrupt power loss'
+            " due to battery exhaustion may lead to data corruption! For backwards-compatibility"
+            " reasons, upower will use it anyway. However, we highly recommend changing"
+            " the setting to one of the supported values.",
+            timeout=UP_DAEMON_ACTION_DELAY + 0.5,
+        )
+
         # simulate that battery has 1% (less than PercentageAction)
         self.testbed.set_attribute(bat0, "energy_now", "600000")
         self.testbed.uevent(bat0, "change")
