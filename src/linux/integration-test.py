@@ -171,6 +171,7 @@ class Tests(dbusmock.DBusTestCase):
         self.proxy = None
         self.daemon = None
         self.bluez = None
+        self.logind = None
         self.start_logind({"CanHybridSleep": "yes"})
         self.start_polkitd({})
 
@@ -408,6 +409,8 @@ class Tests(dbusmock.DBusTestCase):
                 )
 
     def start_logind(self, parameters=None):
+        if self.logind:
+            self.stop_process(self.logind)
         self.logind, self.logind_obj = self.spawn_server_template(
             "logind", parameters or {}
         )
@@ -3659,6 +3662,82 @@ class Tests(dbusmock.DBusTestCase):
 
         self.daemon_log.check_line(
             "About to take critical power action: Auto",
+            timeout=UP_DAEMON_ACTION_DELAY + 0.5,
+        )
+
+        self.stop_daemon()
+
+        os.unlink(config.name)
+
+    def test_critical_action_fallback(self):
+        """check that critical action fallback works"""
+
+        self.start_logind(
+            {
+                "CanHybridSleep": "no",
+                "CanHibernate": "no",
+            }
+        )
+
+        bat0 = self.testbed.add_device(
+            "power_supply",
+            "BAT0",
+            None,
+            [
+                "type",
+                "Battery",
+                "present",
+                "1",
+                "status",
+                "Discharging",
+                "energy_full",
+                "60000000",
+                "energy_full_design",
+                "80000000",
+                "energy_now",
+                "50000000",
+                "voltage_now",
+                "12000000",
+            ],
+            [],
+        )
+
+        config = tempfile.NamedTemporaryFile(delete=False, mode="w")
+        config.write("[UPower]\n")
+        config.write("UsePercentageForPolicy=true\n")
+        config.write("PercentageAction=5\n")
+        config.write("CriticalPowerAction=HybridSleep\n")
+        config.close()
+
+        self.start_daemon(cfgfile=config.name, warns=True)
+
+        self.assertEqual(self.proxy.GetCriticalAction(), "PowerOff")
+
+        devs = self.proxy.EnumerateDevices()
+        self.assertEqual(len(devs), 1)
+        bat0_up = devs[0]
+
+        self.daemon_log.check_line(
+            "Critical action HybridSleep is unavailable, falling back",
+            timeout=UP_DAEMON_ACTION_DELAY + 0.5,
+        )
+
+        self.daemon_log.check_line(
+            "Critical action Hibernate is unavailable, falling back",
+            timeout=UP_DAEMON_ACTION_DELAY + 0.5,
+        )
+
+        # simulate that battery has 1% (less than PercentageAction)
+        self.testbed.set_attribute(bat0, "energy_now", "600000")
+        self.testbed.uevent(bat0, "change")
+
+        time.sleep(0.5)
+        self.assertEqual(
+            self.get_dbus_display_property("WarningLevel"), UP_DEVICE_LEVEL_ACTION
+        )
+
+        self.daemon_log.check_line(
+            "About to take critical power action: PowerOff",
             timeout=UP_DAEMON_ACTION_DELAY + 0.5,
         )
 
