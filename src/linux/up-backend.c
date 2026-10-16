@@ -728,30 +728,31 @@ up_backend_take_action (UpBackend *backend)
 				      -1,
 				      NULL,
 				      &error);
-
-	/* if the new API doesn't work, use old one */
-	if (error != NULL) {
-		const char *old_method = NULL;
-		g_debug ("The new power action API doesn't work, using old one.");
-
-		if (!g_strcmp0 (method, "Sleep")) {
-			/* Sleep() is not available, so PowerOff instead */
-			g_debug ("Sleep() is not available, using PowerOff instead");
-			old_method = "PowerOff";
-		} else {
-			old_method = action;
-		}
-		g_dbus_proxy_call (backend->priv->logind_proxy,
-				   old_method,
-				   g_variant_new ("(b)", FALSE),
-				   G_DBUS_CALL_FLAGS_NONE,
-				   -1,
-				   NULL,
-				   NULL,
-				   NULL);
-	}
 	if (res != NULL)
 		g_variant_unref (res);
+
+	/* if the new WithFlags API is missing, then use the old one */
+	if (g_error_matches (error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD)) {
+		/* Note that we never reach this in the Sleep() case, because if
+		 * Sleep() is missing than CanSleep() is also missing and we
+		 * must have excluded the Auto action. */
+		const char *old_method = action;
+
+		g_clear_error (&error);
+		res = g_dbus_proxy_call_sync (backend->priv->logind_proxy,
+					      old_method,
+					      g_variant_new ("(b)", FALSE),
+					      G_DBUS_CALL_FLAGS_NONE,
+					      -1,
+					      NULL,
+					      &error);
+		if (res != NULL)
+			g_variant_unref (res);
+	}
+
+	if (error != NULL)
+		g_warning ("Failed to take critical power action (%s): %s",
+			   action, error->message);
 }
 
 /**
