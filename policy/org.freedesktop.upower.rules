@@ -14,18 +14,24 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- *
  */
 
-
 polkit.addRule(function(action, subject) {
-    if ((action.id == "org.freedesktop.login1.power-off-ignore-inhibit" ||
-         action.id == "org.freedesktop.login1.reboot-ignore-inhibit" ||
-         action.id == "org.freedesktop.login1.halt-ignore-inhibit" ||
-         action.id == "org.freedesktop.login1.suspend-ignore-inhibit" ||
-         action.id == "org.freedesktop.login1.hibernate-ignore-inhibit") &&
-        subject.user == "root") {
-        return polkit.Result.YES;
-    }
-});
+    if (subject.system_unit != "upower.service")
+        return polkit.Result.NOT_HANDLED;
 
+    const is_power_action = [
+        "power-off",
+        "reboot",
+        "halt",
+        "suspend",
+        "hibernate",
+    ].some(function (power_action) {
+        const base_action = "org.freedesktop.login1." + power_action;
+        return action.id == base_action ||
+            action.id == base_action + "-multiple-sessions" ||
+            action.id == base_action + "-ignore-inhibit";
+    });
+    if (is_power_action)
+        return polkit.Result.YES;
+});
