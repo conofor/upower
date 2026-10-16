@@ -591,6 +591,17 @@ up_backend_unplug (UpBackend *backend)
 static gboolean
 check_action_result (GVariant *result)
 {
+	/* Note that systemd has a complicated list of values that it possibly
+	 * returns here. Normally, we should be checking for more than just "yes".
+	 *
+	 * However: upower installs a polkit .rules file that changes systemd's
+	 * behavior: if we see a value other than "yes", we're either completely
+	 * disallowed from taking the action or there will be a polkit prompt.
+	 *
+	 * A polkit prompt is dangerous, because the user might not be around to
+	 * immediately enter their password. In that case, we'd sit at the prompt
+	 * until the battery dies, effectively taking the "Ignore" action. */
+
 	if (result) {
 		const char *s;
 
