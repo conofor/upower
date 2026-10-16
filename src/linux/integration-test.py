@@ -3238,7 +3238,7 @@ class Tests(dbusmock.DBusTestCase):
         self.assertEqual(len(self.logind_obj.ListInhibitors()), 2)
 
         self.daemon_log.check_line(
-            "About to call logind method Hibernate",
+            "About to take critical power action: Hibernate",
             timeout=UP_DAEMON_ACTION_DELAY + 0.5,
         )
 
@@ -3294,7 +3294,7 @@ class Tests(dbusmock.DBusTestCase):
         )
 
         self.daemon_log.check_line(
-            "About to call logind method Hibernate",
+            "About to take critical power action: Hibernate",
             timeout=UP_DAEMON_ACTION_DELAY + 0.5,
         )
 
@@ -3317,7 +3317,7 @@ class Tests(dbusmock.DBusTestCase):
         )
 
         self.daemon_log.check_line(
-            "About to call logind method Hibernate",
+            "About to take critical power action: Hibernate",
             timeout=UP_DAEMON_ACTION_DELAY + 0.5,
         )
 
@@ -3384,7 +3384,8 @@ class Tests(dbusmock.DBusTestCase):
         )
 
         self.daemon_log.check_line(
-            "About to call logind method Suspend", timeout=UP_DAEMON_ACTION_DELAY + 0.5
+            "About to take critical power action: Suspend",
+            timeout=UP_DAEMON_ACTION_DELAY + 0.5,
         )
 
         self.stop_daemon()
@@ -3453,7 +3454,7 @@ class Tests(dbusmock.DBusTestCase):
         )
 
         self.daemon_log.check_line(
-            "About to call logind method HybridSleep",
+            "About to take critical power action: HybridSleep",
             timeout=UP_DAEMON_ACTION_DELAY + 0.5,
         )
 
@@ -3520,7 +3521,8 @@ class Tests(dbusmock.DBusTestCase):
         )
 
         self.daemon_log.check_line(
-            "About to call logind method Ignore", timeout=UP_DAEMON_ACTION_DELAY + 0.5
+            "About to take critical power action: Ignore",
+            timeout=UP_DAEMON_ACTION_DELAY + 0.5,
         )
 
         self.stop_daemon()
@@ -3587,7 +3589,66 @@ class Tests(dbusmock.DBusTestCase):
         )
 
         self.daemon_log.check_line(
-            "About to call logind method HybridSleep",
+            "About to take critical power action: HybridSleep",
+            timeout=UP_DAEMON_ACTION_DELAY + 0.5,
+        )
+
+        self.stop_daemon()
+
+        os.unlink(config.name)
+
+    def test_critical_action_is_auto(self):
+        """check that critical action is auto"""
+
+        bat0 = self.testbed.add_device(
+            "power_supply",
+            "BAT0",
+            None,
+            [
+                "type",
+                "Battery",
+                "present",
+                "1",
+                "status",
+                "Discharging",
+                "energy_full",
+                "60000000",
+                "energy_full_design",
+                "80000000",
+                "energy_now",
+                "50000000",
+                "voltage_now",
+                "12000000",
+            ],
+            [],
+        )
+
+        config = tempfile.NamedTemporaryFile(delete=False, mode="w")
+        config.write("[UPower]\n")
+        config.write("UsePercentageForPolicy=true\n")
+        config.write("PercentageAction=5\n")
+        config.write("CriticalPowerAction=Auto\n")
+        config.close()
+
+        self.start_daemon(cfgfile=config.name, warns=True)
+
+        self.assertEqual(self.proxy.GetCriticalAction(), "Auto")
+
+        devs = self.proxy.EnumerateDevices()
+        self.assertEqual(len(devs), 1)
+        bat0_up = devs[0]
+
+        # simulate that battery has 1% (less than PercentageAction)
+        self.testbed.set_attribute(bat0, "energy_now", "600000")
+        self.testbed.uevent(bat0, "change")
+
+        time.sleep(0.5)
+        self.assertEqual(
+            self.get_dbus_display_property("WarningLevel"), UP_DEVICE_LEVEL_ACTION
+        )
+
+        self.daemon_log.check_line(
+            "About to take critical power action: Auto",
             timeout=UP_DAEMON_ACTION_DELAY + 0.5,
         )
 

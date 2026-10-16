@@ -623,18 +623,18 @@ const char *
 up_backend_get_critical_action (UpBackend *backend)
 {
 	struct {
-		const gchar *method;
+		const gchar *name;
 		const gchar *can_method;
 	} actions[] = {
 		/*
 		 * The fallback order is
-		 * Suspend -> HybridSleep -> Hibernate -> PowerOff -> Sleep -> Ignore
+		 * Suspend -> HybridSleep -> Hibernate -> PowerOff -> Auto -> Ignore
 		 */
 		{ "Suspend", "CanSuspend" },
 		{ "HybridSleep", "CanHybridSleep" },
 		{ "Hibernate", "CanHibernate" },
 		{ "PowerOff", "CanPowerOff" },
-		{ "Sleep", "CanSleep"},
+		{ "Auto", "CanSleep"},
 		{ "Ignore", NULL },
 	};
 	g_autofree gchar *action = NULL;
@@ -657,15 +657,9 @@ up_backend_get_critical_action (UpBackend *backend)
 		}
 	}
 
-	/* if "Auto", use "Sleep()" */
-	if (!g_strcmp0 (action, "Auto")) {
-		g_free (action);
-		action = g_strdup_printf ("Sleep");
-	}
-
 	if (action != NULL) {
 		for (i = 0; i < G_N_ELEMENTS (actions); i++)
-			if (g_str_equal (actions[i].method, action))
+			if (g_str_equal (actions[i].name, action))
 				break;
 		if (i >= G_N_ELEMENTS (actions))
 			i = 1;
@@ -690,8 +684,9 @@ up_backend_get_critical_action (UpBackend *backend)
 				continue;
 		}
 
-		return actions[i].method;
+		return actions[i].name;
 	}
+
 	g_assert_not_reached ();
 }
 
@@ -706,28 +701,28 @@ up_backend_take_action (UpBackend *backend)
 {
 	GVariant *res = NULL;
 	g_autoptr (GError) error = NULL;
-	g_autofree gchar *action = NULL;
-	const char *method;
+	g_autofree gchar *method = NULL;
+	const char *action;
 
-	method = up_backend_get_critical_action (backend);
-	g_assert (method != NULL);
+	action = up_backend_get_critical_action (backend);
+	g_assert (action != NULL);
 
 	/* Take action */
-	g_debug ("About to call logind method %s", method);
+	g_debug ("About to take critical power action: %s", action);
 
 	/* Do nothing if the action is set to "Ignore" */
-	if (g_strcmp0 (method, "Ignore") == 0) {
+	if (g_strcmp0 (action, "Ignore") == 0) {
 		return;
 	}
 
-	if (!g_strcmp0 (method, "Sleep"))
-		action = g_strdup ("Sleep");
+	if (!g_strcmp0 (action, "Auto"))
+		method = g_strdup ("Sleep");
 	else
-		action = g_strdup_printf ("%sWithFlags", method);
+		method = g_strdup_printf ("%sWithFlags", action);
 
 	/* flag 16 is SD_LOGIND_SKIP_INHIBITORS */
 	res = g_dbus_proxy_call_sync (backend->priv->logind_proxy,
-				      action,
+				      method,
 				      g_variant_new ("(t)", 16),
 				      G_DBUS_CALL_FLAGS_NONE,
 				      -1,
@@ -736,18 +731,18 @@ up_backend_take_action (UpBackend *backend)
 
 	/* if the new API doesn't work, use old one */
 	if (error != NULL) {
-		g_autofree gchar *action_old = NULL;
+		const char *old_method = NULL;
 		g_debug ("The new power action API doesn't work, using old one.");
 
 		if (!g_strcmp0 (method, "Sleep")) {
 			/* Sleep() is not available, so PowerOff instead */
 			g_debug ("Sleep() is not available, using PowerOff instead");
-			action_old = g_strdup ("PowerOff");
+			old_method = "PowerOff";
 		} else {
-			action_old = g_strdup (method);
+			old_method = action;
 		}
 		g_dbus_proxy_call (backend->priv->logind_proxy,
-				   action_old,
+				   old_method,
 				   g_variant_new ("(b)", FALSE),
 				   G_DBUS_CALL_FLAGS_NONE,
 				   -1,

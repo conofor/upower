@@ -133,19 +133,22 @@ method return sender=:1.386 -> dest=:1.451 reply_serial=2
             the system will take this action. Possible values are:
             <doc:list>
               <doc:item>
-                <doc:term>HybridSleep</doc:term>
+                <doc:term>HybridSleep</doc:term><doc:definition>System will suspend and hibernate simultaneously. This allows for faster resume until the battery is completely exhausted</doc:definition>
               </doc:item>
               <doc:item>
-                <doc:term>Hibernate</doc:term>
+                <doc:term>Hibernate</doc:term><doc:definition>System will hibernate</doc:definition>
               </doc:item>
               <doc:item>
-                <doc:term>PowerOff</doc:term>
+                <doc:term>PowerOff</doc:term><doc:definition>System will power off</doc:definition>
               </doc:item>
               <doc:item>
-                <doc:term>Suspend</doc:term>
+                <doc:term>Suspend</doc:term><doc:definition>System will suspend, likely followed by sudden power loss</doc:definition>
               </doc:item>
               <doc:item>
-                <doc:term>Ignore</doc:term>
+                <doc:term>Ignore</doc:term><doc:definition>Nothing will happen, likely followed by sudden power loss</doc:definition>
+              </doc:item>
+              <doc:item>
+                <doc:term>Auto</doc:term><doc:definition>Deprecated. logind will decide what to do. Usually, system will either HybridSleep or Suspend</doc:definition>
               </doc:item>
             </doc:list>
           </doc:para>
