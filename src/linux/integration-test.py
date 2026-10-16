@@ -1830,8 +1830,6 @@ class Tests(dbusmock.DBusTestCase):
     def test_battery_charge_limit_multiple_batteries(self):
         """Battery with charge limits with multiple batteries"""
 
-        if not self.polkit:
-            self.start_polkitd({})
         self.polkit_obj.SetAllowed(["org.freedesktop.UPower.enable-charging-limit"])
 
         self.testbed.add_device(
@@ -1931,8 +1929,6 @@ class Tests(dbusmock.DBusTestCase):
     def test_battery_charge_limit_multiple_batteries_with_charge_types(self):
         """Enable the charge limit and the charge_types will be set to Custom if it is present"""
 
-        if not self.polkit:
-            self.start_polkitd({})
         self.polkit_obj.SetAllowed(["org.freedesktop.UPower.enable-charging-limit"])
 
         bat0 = self.testbed.add_device(
@@ -2075,8 +2071,6 @@ class Tests(dbusmock.DBusTestCase):
     ):
         """Enable the charge limit and the charge_types will be set to Custom but "Custom" is not supported"""
 
-        if not self.polkit:
-            self.start_polkitd({})
         self.polkit_obj.SetAllowed(["org.freedesktop.UPower.enable-charging-limit"])
 
         bat0 = self.testbed.add_device(
@@ -2204,8 +2198,6 @@ class Tests(dbusmock.DBusTestCase):
         3. the charge_types attribute with Long_life, Fast and Adaptive.
         """
 
-        if not self.polkit:
-            self.start_polkitd({})
         self.polkit_obj.SetAllowed(["org.freedesktop.UPower.enable-charging-limit"])
 
         bat0 = self.testbed.add_device(
@@ -2377,8 +2369,6 @@ class Tests(dbusmock.DBusTestCase):
     ):
         """Shows the charge_threshold_settings_supported property"""
 
-        if not self.polkit:
-            self.start_polkitd({})
         self.polkit_obj.SetAllowed(["org.freedesktop.UPower.enable-charging-limit"])
 
         bat0 = self.testbed.add_device(
@@ -2513,9 +2503,6 @@ class Tests(dbusmock.DBusTestCase):
     def test_battery_charge_limit_multiple_batteries_polkit_not_allowed(self):
         """Battery with charge limits with multiple batteries, but polkit isn't allowed"""
 
-        if not self.polkit:
-            self.start_polkitd({})
-
         self.testbed.add_device(
             "power_supply",
             "BAT0",
@@ -2621,8 +2608,6 @@ class Tests(dbusmock.DBusTestCase):
     def test_battery_charge_limit_supported(self):
         """Battery with charge_control_start/end_threshold supported"""
 
-        if not self.polkit:
-            self.start_polkitd({})
         self.polkit_obj.SetAllowed(["org.freedesktop.UPower.enable-charging-limit"])
 
         self.testbed.add_device(
@@ -2788,9 +2773,6 @@ class Tests(dbusmock.DBusTestCase):
     def test_battery_charge_limit_supported_polkit_not_allowed(self):
         """Battery with charge_control_start/end_threshold supported"""
 
-        if not self.polkit:
-            self.start_polkitd({})
-
         self.testbed.add_device(
             "power_supply",
             "BAT0",
@@ -2906,8 +2888,6 @@ class Tests(dbusmock.DBusTestCase):
     def test_battery_charge_threshold_unsupported(self):
         """Battery with only start_threshold supported"""
 
-        if not self.polkit:
-            self.start_polkitd({})
         self.polkit_obj.SetAllowed(["org.freedesktop.UPower.enable-charging-limit"])
 
         self.testbed.add_device(
