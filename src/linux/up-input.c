@@ -184,9 +184,10 @@ gboolean
 up_input_coldplug (UpInput *input, GUdevDevice *d)
 {
 	gboolean ret = FALSE;
-	gchar *path;
-	gchar *contents = NULL;
-	gchar *native_path = NULL;
+
+	g_autofree gchar *path = NULL;
+	g_autofree gchar *contents = NULL;
+	g_autofree gchar *native_path = NULL;
 	const gchar *device_file;
 	GError *error = NULL;
 	glong bitmask[NBITS(SW_MAX)];
@@ -200,16 +201,15 @@ up_input_coldplug (UpInput *input, GUdevDevice *d)
 	/* is a switch */
 	path = g_build_filename (native_path, "../capabilities/sw", NULL);
 	if (!g_file_test (path, G_FILE_TEST_EXISTS)) {
-		char *path2;
+		g_autofree gchar *path2 = NULL;
 		path2 = g_build_filename (native_path, "capabilities/sw", NULL);
 		if (!g_file_test (path2, G_FILE_TEST_EXISTS)) {
 			g_debug ("not a switch [%s]", path);
 			g_debug ("not a switch [%s]", path2);
-			g_free (path2);
-			goto out;
+			return FALSE;
 		}
 		g_free (path);
-		path = path2;
+		path = g_steal_pointer (&path2);
 	}
 
 	/* get caps */
@@ -217,46 +217,41 @@ up_input_coldplug (UpInput *input, GUdevDevice *d)
 	if (!ret) {
 		g_debug ("failed to get contents for [%s]: %s", path, error->message);
 		g_error_free (error);
-		goto out;
+		return FALSE;
 	}
 
 	/* convert to a bitmask */
 	num_bits = up_input_str_to_bitmask (contents, bitmask, sizeof (bitmask));
 	if ((num_bits == 0) || (num_bits >= SW_CNT)) {
 		g_debug ("invalid bitmask entry for %s", native_path);
-		ret = FALSE;
-		goto out;
+		return FALSE;
 	}
 
 	/* is this the watched switch? */
 	if (!test_bit (input->watched_switch, bitmask)) {
 		g_debug ("not the watched switch: %s", native_path);
-		ret = FALSE;
-		goto out;
+		return FALSE;
 	}
 
 	/* get device file */
 	device_file = g_udev_device_get_device_file (d);
 	if (device_file == NULL || device_file[0] == '\0') {
 		g_debug ("no device file: %s", native_path);
-		ret = FALSE;
-		goto out;
+		return FALSE;
 	}
 
 	/* open device file */
 	eventfd = open (device_file, O_RDONLY | O_NONBLOCK);
 	if (eventfd < 0) {
 		g_warning ("cannot open '%s': %s", device_file, strerror (errno));
-		ret = FALSE;
-		goto out;
+		return FALSE;
 	}
 
 	/* get initial state */
 	if (ioctl (eventfd, EVIOCGSW(sizeof (bitmask)), bitmask) < 0) {
 		g_warning ("ioctl EVIOCGSW on %s failed", native_path);
 		close(eventfd);
-		ret = FALSE;
-		goto out;
+		return FALSE;
 	}
 
 	/* create channel */
@@ -269,8 +264,7 @@ up_input_coldplug (UpInput *input, GUdevDevice *d)
 	if (status != G_IO_STATUS_NORMAL) {
 		g_warning ("failed to set encoding: %s", error->message);
 		g_error_free (error);
-		ret = FALSE;
-		goto out;
+		return FALSE;
 	}
 
 	/* watch this */
@@ -280,11 +274,7 @@ up_input_coldplug (UpInput *input, GUdevDevice *d)
 	g_debug ("using %s for watched switch event", native_path);
 	input->last_switch_state = test_bit (input->watched_switch, bitmask);
 
-out:
-	g_free (native_path);
-	g_free (path);
-	g_free (contents);
-	return ret;
+	return TRUE;
 }
 
 /**
