@@ -35,6 +35,7 @@ UpInput			*up_input_new_for_switch	(guint		 watched_switch);
 gboolean		 up_input_coldplug		(UpInput	*input,
 							 GUdevDevice	*d);
 gboolean		 up_input_get_switch_value	(UpInput	*input);
+const gchar		*up_input_get_native_path	(UpInput	*input);
 
 G_END_DECLS
 

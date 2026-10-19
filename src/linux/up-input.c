@@ -40,6 +40,7 @@ struct _UpInput
 	struct input_event	 event;
 	gsize			 offset;
 	GIOChannel		*channel;
+	GUdevDevice		*native;
 };
 
 G_DEFINE_TYPE (UpInput, up_input, G_TYPE_OBJECT)
@@ -82,6 +83,24 @@ up_input_get_device_sysfs_path (GUdevDevice *device)
 	return g_build_filename (root,
 				 g_udev_device_get_sysfs_path (device),
 				 NULL);
+}
+
+/**
+ * up_input_get_native_path:
+ * @input: a #UpInput
+ *
+ * Returns the sysfs path of the device backing this switch, or %NULL
+ * on failed lookup.
+ **/
+const gchar *
+up_input_get_native_path (UpInput *input)
+{
+	g_return_val_if_fail (UP_IS_INPUT(input), NULL);
+
+	if (input->native == NULL)
+		return NULL;
+
+	return g_udev_device_get_sysfs_path (input->native);
 }
 
 /**
@@ -184,7 +203,6 @@ gboolean
 up_input_coldplug (UpInput *input, GUdevDevice *d)
 {
 	gboolean ret = FALSE;
-
 	g_autofree gchar *path = NULL;
 	g_autofree gchar *contents = NULL;
 	g_autofree gchar *native_path = NULL;
@@ -274,6 +292,8 @@ up_input_coldplug (UpInput *input, GUdevDevice *d)
 	g_debug ("using %s for watched switch event", native_path);
 	input->last_switch_state = test_bit (input->watched_switch, bitmask);
 
+	g_set_object (&input->native, d);
+
 	return TRUE;
 }
 
@@ -303,6 +323,7 @@ up_input_finalize (GObject *object)
 		g_io_channel_shutdown (input->channel, FALSE, NULL);
 		g_io_channel_unref (input->channel);
 	}
+	g_clear_object (&input->native);
 	G_OBJECT_CLASS (up_input_parent_class)->finalize (object);
 }
 

@@ -60,7 +60,7 @@ struct UpBackendPrivate
 	UpDaemon		*daemon;
 	UpDeviceList		*device_list;
 	GUdevClient		*gudev_client;
-	UpInput			*lid_device;
+	GPtrArray		*lid_devices;
 	UpConfig		*config;
 	GDBusProxy		*logind_proxy;
 	guint                    logind_sleep_id;
@@ -83,12 +83,56 @@ static guint signals [SIGNAL_LAST] = { 0 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (UpBackend, up_backend, G_TYPE_OBJECT)
 
+/**
+ * up_backend_update_lid_state:
+ * @backend: a #UpBackend
+ *
+ * Recompute the composite lid state from every tracked lid device.
+ *
+ * Several machines expose more than one SW_LID device (e.g. a silent EC
+ * one and an ACPI one that actually reports events), so the lid is
+ * considered closed if any device reports it closed rather than letting
+ * whichever device fired last win. */
+static void
+up_backend_update_lid_state (UpBackend *backend)
+{
+	GPtrArray *lid_devices = backend->priv->lid_devices;
+	gboolean closed = FALSE;
+	guint i;
+
+	for (i = 0; i < lid_devices->len; i++) {
+		UpInput *input = g_ptr_array_index (lid_devices, i);
+		if (up_input_get_switch_value (input)) {
+			closed = TRUE;
+			break;
+		}
+	}
+
+	up_daemon_set_lid_is_present (backend->priv->daemon, lid_devices->len > 0);
+	up_daemon_set_lid_is_closed (backend->priv->daemon, closed);
+}
+
 static void
 input_switch_changed_cb (UpInput   *input,
 			 gboolean   switch_value,
 			 UpBackend *backend)
 {
-	up_daemon_set_lid_is_closed (backend->priv->daemon, switch_value);
+	up_backend_update_lid_state (backend);
+}
+
+static UpInput *
+up_backend_find_lid_device (UpBackend *backend, const gchar *sysfs_path)
+{
+	GPtrArray *lid_devices = backend->priv->lid_devices;
+	guint i;
+
+	for (i = 0; i < lid_devices->len; i++) {
+		UpInput *input = g_ptr_array_index (lid_devices, i);
+		if (g_strcmp0 (up_input_get_native_path (input), sysfs_path) == 0)
+			return input;
+	}
+
+	return NULL;
 }
 
 static void
@@ -96,24 +140,30 @@ up_backend_uevent_signal_handler_cb (GUdevClient *client, const gchar *action,
 				      GUdevDevice *device, gpointer user_data)
 {
 	UpBackend *backend = UP_BACKEND (user_data);
+	const gchar *sysfs_path;
 	g_autoptr(UpInput) input = NULL;
 
-	if (backend->priv->lid_device)
+	if (g_strcmp0 (action, "add") != 0)
 		return;
 
-	if (g_strcmp0 (action, "add") != 0)
+	sysfs_path = g_udev_device_get_sysfs_path (device);
+	if (sysfs_path == NULL)
+		return;
+
+	/* already tracking this device (e.g. a re-emitted "add" uevent) */
+	if (up_backend_find_lid_device (backend, sysfs_path) != NULL)
 		return;
 
 	/* check if the input device is a lid */
 	input = up_input_new ();
 	if (up_input_coldplug (input, device)) {
-		up_daemon_set_lid_is_present (backend->priv->daemon, TRUE);
 		g_signal_connect (G_OBJECT (input), "switch-changed",
 				  G_CALLBACK (input_switch_changed_cb), backend);
-		up_daemon_set_lid_is_closed (backend->priv->daemon,
-					     up_input_get_switch_value (input));
 
-		backend->priv->lid_device = g_steal_pointer (&input);
+		g_ptr_array_add (backend->priv->lid_devices,
+				 g_steal_pointer (&input));
+
+		up_backend_update_lid_state (backend);
 	}
 }
 
@@ -579,7 +629,7 @@ up_backend_unplug (UpBackend *backend)
 	g_clear_object (&backend->priv->gudev_client);
 	g_clear_object (&backend->priv->udev_enum);
 	g_clear_object (&backend->priv->device_list);
-	g_clear_object (&backend->priv->lid_device);
+	g_clear_pointer (&backend->priv->lid_devices, g_ptr_array_unref);
 	g_clear_object (&backend->priv->daemon);
 	if (backend->priv->bluez_watch_id > 0) {
 		g_bus_unwatch_name (backend->priv->bluez_watch_id);
@@ -912,6 +962,7 @@ up_backend_init (UpBackend *backend)
 	guint sleep_id;
 
 	backend->priv = up_backend_get_instance_private (backend);
+	backend->priv->lid_devices = g_ptr_array_new_with_free_func (g_object_unref);
 	backend->priv->config = up_config_new ();
 	backend->priv->logind_proxy = g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
 								     0,
@@ -970,7 +1021,7 @@ up_backend_finalize (GObject *object)
 
 	g_clear_object (&backend->priv->logind_proxy);
 
-	g_clear_object (&backend->priv->lid_device);
+	g_clear_pointer (&backend->priv->lid_devices, g_ptr_array_unref);
 
 	G_OBJECT_CLASS (up_backend_parent_class)->finalize (object);
 }
