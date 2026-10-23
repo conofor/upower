@@ -71,17 +71,17 @@ static guint signals[LAST_SIGNAL] = { 0 };
 static char *
 up_input_get_device_sysfs_path (GUdevDevice *device)
 {
-  const char *root;
+	const char *root;
 
-  g_return_val_if_fail (G_UDEV_IS_DEVICE (device), FALSE);
+	g_return_val_if_fail (G_UDEV_IS_DEVICE (device), NULL);
 
-  root = g_getenv ("UMOCKDEV_DIR");
-  if (!root || *root == '\0')
-    return g_strdup (g_udev_device_get_sysfs_path (device));
+	root = g_getenv ("UMOCKDEV_DIR");
+	if (!root || *root == '\0')
+		return g_strdup (g_udev_device_get_sysfs_path (device));
 
-  return g_build_filename (root,
-                           g_udev_device_get_sysfs_path (device),
-                           NULL);
+	return g_build_filename (root,
+				 g_udev_device_get_sysfs_path (device),
+				 NULL);
 }
 
 /**
