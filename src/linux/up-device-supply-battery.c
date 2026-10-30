@@ -59,14 +59,6 @@ typedef enum {
 	UP_DEVICE_SUPPLY_BATTERY_CHARGE_TYPE_LAST,
 } UpDeviceSupplyBatteryChargeTypes;
 
-typedef enum {
-	UP_DEVICE_SUPPLY_BATTERY_CHARGE_THRESHOLD_SETTINGS_0,
-	UP_DEVICE_SUPPLY_BATTERY_CHARGE_THRESHOLD_SETTINGS_CHARGE_CONTROL_START_THRESHOLD = 1 << 0,
-	UP_DEVICE_SUPPLY_BATTERY_CHARGE_THRESHOLD_SETTINGS_CHARGE_CONTROL_END_THRESHOLD = 1 << 1,
-	UP_DEVICE_SUPPLY_BATTERY_CHARGE_THRESHOLD_SETTINGS_CHARGE_TYPES = 1 << 2,
-	UP_DEVICE_SUPPLY_BATTERY_CHARGE_THRESHOLD_SETTINGS_LAST,
-} UpDeviceSupplyBatteryChargeThresholdSettings;
-
 struct _UpDeviceSupplyBattery
 {
 	UpDeviceBattery		 parent;
@@ -214,14 +206,14 @@ up_device_supply_battery_get_charge_control_limits (UpDeviceSupplyBattery *self,
 		gint value = g_udev_device_get_sysfs_attr_as_int_uncached (native, "charge_control_start_threshold");
 		if (value > 0 && value < 100)
 			info->charge_control_start_threshold = value;
-		info->charge_threshold_settings |= UP_DEVICE_SUPPLY_BATTERY_CHARGE_THRESHOLD_SETTINGS_CHARGE_CONTROL_START_THRESHOLD;
+		info->charge_threshold_settings |= UP_DEVICE_BATTERY_CHARGE_THRESHOLD_START;
 	}
 
 	if (g_udev_device_has_sysfs_attr (native, "charge_control_end_threshold")) {
 		gint value = g_udev_device_get_sysfs_attr_as_int_uncached (native, "charge_control_end_threshold");
 		if (value > 0 && value < 100)
 			info->charge_control_end_threshold = value;
-		info->charge_threshold_settings |= UP_DEVICE_SUPPLY_BATTERY_CHARGE_THRESHOLD_SETTINGS_CHARGE_CONTROL_END_THRESHOLD;
+		info->charge_threshold_settings |= UP_DEVICE_BATTERY_CHARGE_THRESHOLD_END;
 	}
 
 	return TRUE;
@@ -341,7 +333,7 @@ up_device_battery_get_supported_charge_types (UpDevice *device, UpBatteryInfo *i
 	if (charge_type_str == NULL)
 		return;
 
-	info->charge_threshold_settings |= UP_DEVICE_SUPPLY_BATTERY_CHARGE_THRESHOLD_SETTINGS_CHARGE_TYPES;
+	info->charge_threshold_settings |= UP_DEVICE_BATTERY_CHARGE_THRESHOLD_CHARGE_TYPES;
 
 	types = g_strsplit (charge_type_str, " ", 0);
 	for (int i = 0; i < g_strv_length(types); i++) {

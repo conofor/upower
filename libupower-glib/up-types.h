@@ -127,6 +127,19 @@ typedef enum {
 	UP_DEVICE_LEVEL_LAST
 } UpDeviceLevel;
 
+/**
+ * UpDeviceBatteryChargeThresholdSettings:
+ *
+ * The charge threshold settings supported by a battery.
+ **/
+typedef enum {
+	UP_DEVICE_BATTERY_CHARGE_THRESHOLD_0,
+	UP_DEVICE_BATTERY_CHARGE_THRESHOLD_START = 1 << 0,
+	UP_DEVICE_BATTERY_CHARGE_THRESHOLD_END = 1 << 1,
+	UP_DEVICE_BATTERY_CHARGE_THRESHOLD_CHARGE_TYPES = 1 << 2,
+	UP_DEVICE_BATTERY_CHARGE_THRESHOLD_LAST,
+} UpDeviceBatteryChargeThresholdSettings;
+
 const gchar	*up_device_kind_to_string		(UpDeviceKind		 type_enum);
 const gchar	*up_device_state_to_string		(UpDeviceState		 state_enum);
 const gchar	*up_device_technology_to_string		(UpDeviceTechnology	 technology_enum);
