@@ -34,7 +34,8 @@ repos:
     hooks:
     - id: black
 -   repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.38.0
+    rev: v0.50.0
     hooks:
     - id: markdownlint
+      language_version: "26.13.0" 
       args: ['--fix', '--ignore', '.github']
