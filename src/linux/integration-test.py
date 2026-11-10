@@ -4532,6 +4532,109 @@ class Tests(dbusmock.DBusTestCase):
         )
         self.stop_daemon()
 
+    def test_hidpp_mouse_logitech_online_quirk(self):
+        """Logitech mouse: online=0 with a known battery status is spurious.
+
+        Logitech wireless devices (re)use the online attribute to report the
+        battery status: online=0 together with status=Unknown means the mouse is
+        in wired/charging mode (genuine disconnect), whereas online=0 while the
+        status is still known is spurious and must not hide the device.
+        """
+
+        parent = self.testbed.add_device(
+            "usb", "/devices/pci0000:00/0000:00:14.0/usb3/3-10/3-10:1.2", None, [], []
+        )
+        parent = self.testbed.add_device(
+            "hid",
+            "/devices/pci0000:00/0000:00:14.0/usb3/3-10/3-10:1.2/0003:046D:C52B.0009",
+            parent,
+            [],
+            [],
+        )
+        dev = self.testbed.add_device(
+            "hid",
+            "/devices/pci0000:00/0000:00:14.0/usb3/3-10/3-10:1.2/0003:046D:C52B.0009/0003:046D:4101.000A",
+            parent,
+            [],
+            [],
+        )
+        parent = dev
+        self.testbed.add_device(
+            "input",
+            "/devices/pci0000:00/0000:00:14.0/usb3/3-10/3-10:1.2/0003:046D:C52B.0009/0003:046D:4101.000A/input/input22",
+            parent,
+            [],
+            ["DEVNAME", "input/mouse3", "ID_INPUT_MOUSE", "1"],
+        )
+        bat = self.testbed.add_device(
+            "power_supply",
+            "/devices/pci0000:00/0000:00:14.0/usb3/3-10/3-10:1.2/0003:046D:C52B.0009/0003:046D:4101.000A/power_supply/hidpp_battery_3",
+            parent,
+            [
+                "type",
+                "Battery",
+                "scope",
+                "Device",
+                "present",
+                "1",
+                "online",
+                "1",
+                "status",
+                "Discharging",
+                "capacity",
+                "30",
+                "serial_number",
+                "123456",
+                "model_name",
+                "Fancy Logitech mouse",
+                "manufacturer",
+                "Logitech",
+            ],
+            [],
+        )
+
+        self.start_daemon()
+
+        devs = self.proxy.EnumerateDevices()
+        self.assertEqual(len(devs), 1)
+
+        num_devices = len(devs)
+        client = UPowerGlib.Client.new()
+
+        def device_added_cb(client, device):
+            nonlocal num_devices
+            num_devices += 1
+
+        def device_removed_cb(client, path):
+            nonlocal num_devices
+            num_devices -= 1
+
+        client.connect("device-added", device_added_cb)
+        client.connect("device-removed", device_removed_cb)
+
+        # Spurious online=0 while the status is still known: the quirk keeps the
+        # device visible.
+        self.testbed.set_attribute(bat, "online", "0")
+        self.testbed.uevent(bat, "change")
+        self.wait_for_mainloop()
+        self.assertEqual(num_devices, 1)
+
+        # Genuine disconnect: online=0 and status switches to Unknown
+        # (wired/charging mode). The device is hidden.
+        self.testbed.set_attribute(bat, "status", "Unknown")
+        self.testbed.uevent(bat, "change")
+        self.wait_for_mainloop()
+        self.assertEqual(num_devices, 0)
+
+        # Reconnect: back online with a known status, the device reappears.
+        self.testbed.set_attribute(bat, "online", "1")
+        self.testbed.set_attribute(bat, "status", "Discharging")
+        self.testbed.uevent(bat, "change")
+        self.wait_for_mainloop()
+        self.assertEqual(num_devices, 1)
+
+        self.stop_daemon()
+
     def test_hidpp_two_mouses_unifying_receiver(self):
         """Upower shows wrong model name when a unifying receiver connects two mouses #309"""
 

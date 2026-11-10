@@ -261,25 +261,28 @@ up_device_supply_refresh_device (UpDeviceSupply *supply,
 	gdouble percentage = 0.0f;
 	UpDeviceLevel level = UP_DEVICE_LEVEL_NONE;
 	gboolean is_present = TRUE;
+	g_autofree gchar *model_name = NULL;
+	g_autofree gchar *serial_number = NULL;
+	g_autofree gchar *vendor = NULL;
 
 	native = G_UDEV_DEVICE (up_device_get_native (device));
 
 	/* initial values */
 	if (!supply->priv->has_coldplug_values) {
-		g_autofree gchar *model_name = NULL;
-		g_autofree gchar *serial_number = NULL;
-
 		/* get values which may be blank */
 		model_name = up_device_supply_get_string (native, "model_name");
 		serial_number = up_device_supply_get_string (native, "serial_number");
+		vendor = up_device_supply_get_string (native, "manufacturer");
 
 		/* some vendors fill this with binary garbage */
 		up_make_safe_string (model_name);
 		up_make_safe_string (serial_number);
+		up_make_safe_string (vendor);
 
 		g_object_set (device,
 			      "model", model_name,
 			      "serial", serial_number,
+			      "vendor", vendor,
 			      "is-rechargeable", TRUE,
 			      "has-history", TRUE,
 			      "has-statistics", TRUE,
@@ -288,6 +291,8 @@ up_device_supply_refresh_device (UpDeviceSupply *supply,
 		/* we only coldplug once, as these values will never change */
 		supply->priv->has_coldplug_values = TRUE;
 	}
+
+	state = up_device_supply_get_state (native);
 
 	/* Some devices change whether they're present or not */
 	if (g_udev_device_has_sysfs_attr_uncached (native, "present"))
@@ -303,6 +308,21 @@ up_device_supply_refresh_device (UpDeviceSupply *supply,
 
 			g_object_get (device, "disconnected", &disconnected_old, NULL);
 			disconnected_new = !g_udev_device_get_sysfs_attr_as_boolean_uncached (native, "online");
+
+			/* Quirk:
+			 * Logitech wireless devices (re)use the online attribute to report
+			 * their battery status. When discharging or full, online=1; the status
+			 * attribute switches to POWER_SUPPLY_STATUS_UNKNOWN when the mouse
+			 * operates in wired mode (charging). So for these devices only treat
+			 * online=0 as a genuine disconnect when the battery state is also
+			 * unknown. */
+			if (disconnected_new && state != UP_DEVICE_STATE_UNKNOWN) {
+				if (vendor == NULL)
+					g_object_get (device, "vendor", &vendor, NULL);
+				if (vendor != NULL && g_strstr_len (vendor, -1, "Logitech") != NULL)
+					disconnected_new = FALSE;
+			}
+
 			if (disconnected_old != disconnected_new)
 				g_object_set (device, "disconnected", disconnected_new, NULL);
 		}
@@ -322,8 +342,6 @@ up_device_supply_refresh_device (UpDeviceSupply *supply,
 			      NULL);
 		return FALSE;
 	}
-
-	state = up_device_supply_get_state (native);
 
 	/* Override whatever the device might have told us
 	 * because a number of them are always discharging */
