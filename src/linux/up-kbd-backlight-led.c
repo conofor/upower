@@ -213,11 +213,12 @@ up_kbd_backlight_led_event_io (GIOChannel *channel, GIOCondition condition, gpoi
 		g_strstrip (buf);
 		brightness = g_ascii_strtoll (buf, &end, 10);
 
-		if (brightness < 0 ||
-		    brightness > priv->max_brightness ||
-		    end == buf) {
+		if (brightness < 0 || end == buf) {
 			brightness = -1;
 			g_warning ("kbd eventio: failed to convert brightness.");
+		} else {
+			/* CLAMP the brightness to the valid range */
+			brightness = CLAMP (brightness, 0, priv->max_brightness);
 		}
 	}
 	g_debug ("kbd eventio: brightness: %d", brightness);

@@ -160,6 +160,85 @@ up_test_kbd_backlight_watch_cleanup (gconstpointer data)
 	g_assert_cmpint (g_rmdir (directory), ==, 0);
 }
 
+typedef struct {
+	gchar *directory;
+	GObject *native;
+	UpDeviceKbdBacklight *device;
+} KbdBacklightFixture;
+
+/**
+ * up_test_kbd_backlight_setup:
+ *
+ * Build a coldplugged LED device whose hardware reports a brightness above
+ * max_brightness through brightness_hw_changed.
+ **/
+static void
+up_test_kbd_backlight_setup (KbdBacklightFixture *fixture, gconstpointer user_data)
+{
+	g_autoptr (GError) error = NULL;
+
+	fixture->directory = g_dir_make_tmp ("upower_kbd_backlight_XXXXXX", &error);
+	g_assert_no_error (error);
+
+	write_attribute (fixture->directory, "max_brightness", "100");
+	write_attribute (fixture->directory, "brightness", "50");
+	/* The hardware reports a value above max_brightness. */
+	write_attribute (fixture->directory, "brightness_hw_changed", "150");
+
+	fixture->native = g_object_new (G_TYPE_OBJECT, NULL);
+	g_object_set_data_full (fixture->native, "native-path",
+				g_strdup (fixture->directory), g_free);
+	fixture->device = g_object_new (UP_TYPE_KBD_BACKLIGHT_LED,
+					"native", fixture->native, NULL);
+	g_assert_true (UP_DEVICE_KBD_BACKLIGHT_GET_CLASS (fixture->device)->coldplug (fixture->device));
+}
+
+/**
+ * up_test_kbd_backlight_teardown:
+ *
+ * Destroy the device and remove the simulated LED attributes.
+ **/
+static void
+up_test_kbd_backlight_teardown (KbdBacklightFixture *fixture, gconstpointer user_data)
+{
+	g_clear_object (&fixture->device);
+	g_clear_object (&fixture->native);
+
+	remove_attribute (fixture->directory, "brightness_hw_changed");
+	remove_attribute (fixture->directory, "brightness");
+	remove_attribute (fixture->directory, "max_brightness");
+	g_assert_cmpint (g_rmdir (fixture->directory), ==, 0);
+	g_clear_pointer (&fixture->directory, g_free);
+}
+
+/**
+ * up_test_kbd_backlight_clamp_to_max_brightness:
+ *
+ * A hardware change reporting a value above max_brightness must be clamped to
+ * max_brightness rather than rejected.
+ **/
+static void
+up_test_kbd_backlight_clamp_to_max_brightness (KbdBacklightFixture *fixture, gconstpointer user_data)
+{
+	GMainContext *context = g_main_context_default ();
+	GSource *source;
+	GPollFunc original_poll;
+	gint brightness;
+
+	/* Force a priority dispatch of the watch without real hardware. */
+	source = g_main_context_find_source_by_user_data (context, fixture->device);
+	g_assert_nonnull (source);
+	original_poll = g_main_context_get_poll_func (context);
+	poll_condition = G_IO_PRI;
+	g_main_context_set_poll_func (context, poll_watch);
+	g_assert_true (g_main_context_iteration (context, FALSE));
+	g_main_context_set_poll_func (context, original_poll);
+
+	/* The out-of-range value is clamped to max_brightness. */
+	g_object_get (fixture->device, "brightness", &brightness, NULL);
+	g_assert_cmpint (brightness, ==, 100);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -178,6 +257,10 @@ main (int argc, char **argv)
 	g_test_init (&argc, &argv, NULL);
 	for (guint i = 0; i < G_N_ELEMENTS (tests); i++)
 		g_test_add_data_func (tests[i].path, &tests[i], up_test_kbd_backlight_watch_cleanup);
+	g_test_add ("/kbd-backlight/clamp-to-max-brightness", KbdBacklightFixture, NULL,
+		    up_test_kbd_backlight_setup,
+		    up_test_kbd_backlight_clamp_to_max_brightness,
+		    up_test_kbd_backlight_teardown);
 
 	return g_test_run ();
 }
