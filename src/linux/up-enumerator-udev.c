@@ -47,6 +47,13 @@ struct _UpEnumeratorUdev {
 
 G_DEFINE_TYPE (UpEnumeratorUdev, up_enumerator_udev, UP_TYPE_ENUMERATOR)
 
+/* Interval between reads of a peripheral battery's dynamic attributes.
+ * The kernel only refreshes them when they are read, and those reads
+ * can block for a long time (they are done on a worker thread). */
+#define READ_VALUES_INTERVAL_SECONDS 60
+
+static void up_enumerator_udev_read_values_async (UpDevice *device);
+
 static char*
 device_parent_id (GUdevDevice *dev)
 {
@@ -241,6 +248,17 @@ uevent_signal_handler_cb (UpEnumeratorUdev *self,
 		               g_udev_device_get_sysfs_path (G_UDEV_DEVICE (up_device_get_native (UP_DEVICE (obj))))) != 0) {
 			uevent_signal_handler_cb (self, "remove", device, client);
 			obj = NULL;
+		} else if (obj != NULL && !UP_IS_DEVICE (obj)) {
+			/* A previous creation attempt failed (e.g. transient
+			 * sysfs state while the HID device was being torn
+			 * down). Drop the stale udev device so this event
+			 * retries creation instead of being blocked forever. */
+			g_autofree char *stale_key = NULL;
+			g_autoptr(GObject) stale = NULL;
+
+			g_hash_table_steal_extended (self->known, device_key,
+			                             (gpointer*) &stale_key, (gpointer*) &stale);
+			obj = NULL;
 		}
 
 		if (!obj) {
@@ -255,7 +273,10 @@ uevent_signal_handler_cb (UpEnumeratorUdev *self,
 				obj = G_OBJECT (up_dev);
 			else
 				obj = G_OBJECT (device);
-			g_hash_table_insert (self->known, (char*) device_key, g_object_ref (obj));
+			/* NB: the key comes from the GUdevDevice passed to this
+			 * uevent handler, which GUdevClient destroys as soon as
+			 * the signal emission is done. Own our copy of it. */
+			g_hash_table_insert (self->known, g_strdup (device_key), g_object_ref (obj));
 
 			/* Fire relevant sibling events and insert into lookup table */
 			parent_id = device_parent_id (device);
@@ -272,11 +293,16 @@ uevent_signal_handler_cb (UpEnumeratorUdev *self,
 
 				for (i = 0; i < devices->len; i++) {
 					GObject *sibling = g_ptr_array_index (devices, i);
+					GObject *sibling_native;
 
 					if (up_dev) {
-						g_autoptr(GUdevDevice) d = get_latest_udev_device (self, sibling);
-						if (d)
-							up_device_sibling_discovered (up_dev, G_OBJECT (d));
+						sibling_native = UP_IS_DEVICE (sibling) ?
+							up_device_get_native (UP_DEVICE (sibling)) : sibling;
+						if (G_UDEV_IS_DEVICE (sibling_native)) {
+							g_autoptr(GUdevDevice) d = get_latest_udev_device (self, sibling_native);
+							if (d)
+								up_device_sibling_discovered (up_dev, G_OBJECT (d));
+						}
 					}
 					if (UP_IS_DEVICE (sibling))
 						up_device_sibling_discovered (UP_DEVICE (sibling), obj);
@@ -288,12 +314,23 @@ uevent_signal_handler_cb (UpEnumeratorUdev *self,
 					g_hash_table_insert (self->siblings, parent_id_key, devices);
 				}
 
-				/* Just a reference to the hash table key */
-				g_object_set_data (obj, "udev-parent-id", parent_id_key);
+				/* Own a copy: the hash table key may go away
+				 * before this object is removed. */
+				g_object_set_data_full (obj, "udev-parent-id",
+				                        g_strdup (parent_id_key), g_free);
 			}
 
 			if (up_dev)
 				g_signal_emit_by_name (self, "device-added", up_dev);
+
+			/* Peripheral batteries (e.g. Bluetooth HID) only update
+			 * their dynamic values when something reads the sysfs
+			 * attributes, and those reads can block for a very long
+			 * time while the device is asleep. Periodically read them
+			 * on a worker thread and apply the values on the main
+			 * thread. */
+			if (up_dev && UP_IS_DEVICE_SUPPLY (up_dev))
+				up_enumerator_udev_read_values_async (up_dev);
 
 		} else {
 			if (!UP_IS_DEVICE (obj)) {
@@ -304,13 +341,17 @@ uevent_signal_handler_cb (UpEnumeratorUdev *self,
 			}
 
 			g_debug ("refreshing device for path %s", g_udev_device_get_sysfs_path (device));
+			/* Make the values carried by this uevent visible to the
+			 * refresh, instead of (potentially blocking) uncached
+			 * sysfs reads. */
+			up_device_update_native (UP_DEVICE (obj), G_OBJECT (device));
 			if (!up_device_refresh_internal (UP_DEVICE (obj), UP_REFRESH_EVENT))
 				g_debug ("no changes on %s", up_device_get_object_path (UP_DEVICE (obj)));
 
 		}
 	} else if (g_strcmp0 (action, "remove") == 0) {
 		g_autoptr(GObject) obj = NULL;
-		const char *key = NULL;
+		g_autofree char *key = NULL;
 
 		g_hash_table_steal_extended (self->known, device_key,
 		                             (gpointer*) &key, (gpointer*) &obj);
@@ -343,11 +384,120 @@ uevent_signal_handler_cb (UpEnumeratorUdev *self,
 	}
 }
 
+typedef struct {
+	gchar *capacity;
+	gchar *status;
+	gchar *capacity_level;
+	gboolean has_present;
+	gboolean present;
+} ReadValuesResult;
+
+static void
+read_values_result_free (ReadValuesResult *res)
+{
+	g_free (res->capacity);
+	g_free (res->status);
+	g_free (res->capacity_level);
+	g_free (res);
+}
+
+static gchar *
+up_enumerator_udev_read_attr (GUdevDevice *native, const gchar *attr)
+{
+	gchar *value;
+
+	/* NOTE: this may block for a long time; only call from a worker
+	 * thread. */
+	value = g_strdup (g_udev_device_get_sysfs_attr_uncached (native, attr));
+	if (value)
+		g_strstrip (value);
+	if (value && value[0] == '\0') {
+		g_free (value);
+		value = NULL;
+	}
+
+	return value;
+}
+
+static void
+up_enumerator_udev_read_values_thread (GTask        *task,
+				       gpointer      source_object,
+				       gpointer      task_data,
+				       GCancellable *cancellable)
+{
+	GUdevDevice *native = task_data;
+	ReadValuesResult *res = g_new0 (ReadValuesResult, 1);
+	const gchar *str;
+
+	res->capacity = up_enumerator_udev_read_attr (native, "capacity");
+	res->status = up_enumerator_udev_read_attr (native, "status");
+	res->capacity_level = up_enumerator_udev_read_attr (native, "capacity_level");
+	str = g_udev_device_get_sysfs_attr_uncached (native, "present");
+	if (str) {
+		res->has_present = TRUE;
+		res->present = (strcmp (str, "1") == 0);
+	}
+
+	g_task_return_pointer (task, res, (GDestroyNotify) read_values_result_free);
+}
+
+static gboolean
+up_enumerator_udev_read_values_again (gpointer user_data)
+{
+	UpDevice *device = UP_DEVICE (user_data);
+
+	up_enumerator_udev_read_values_async (device);
+
+	return G_SOURCE_REMOVE;
+}
+
+static void
+up_enumerator_udev_read_values_cb (GObject      *source,
+				   GAsyncResult *res,
+				   gpointer      user_data)
+{
+	UpDevice *device = UP_DEVICE (source);
+	ReadValuesResult *vals;
+
+	vals = g_task_propagate_pointer (G_TASK (res), NULL);
+	if (vals) {
+		up_device_supply_apply_initial_values (device,
+						       vals->capacity,
+						       vals->status,
+						       vals->capacity_level,
+						       vals->has_present,
+						       vals->present);
+		g_debug ("read values applied to %s", up_device_get_object_path (device));
+		read_values_result_free (vals);
+	}
+
+	/* Read again in a minute, for as long as the device is registered. */
+	if (up_device_is_registered (device))
+		g_timeout_add_seconds_full (G_PRIORITY_DEFAULT,
+					    READ_VALUES_INTERVAL_SECONDS,
+					    up_enumerator_udev_read_values_again,
+					    g_object_ref (device),
+					    g_object_unref);
+}
+
+static void
+up_enumerator_udev_read_values_async (UpDevice *device)
+{
+	GTask *task;
+
+	task = g_task_new (device, NULL, up_enumerator_udev_read_values_cb, NULL);
+	g_task_set_task_data (task,
+			      g_object_ref (G_UDEV_DEVICE (up_device_get_native (device))),
+			      g_object_unref);
+	g_task_run_in_thread (task, up_enumerator_udev_read_values_thread);
+	g_object_unref (task);
+}
+
 static void
 up_enumerator_udev_init (UpEnumeratorUdev *self)
 {
 	self->known = g_hash_table_new_full (g_str_hash, g_str_equal,
-					     NULL, g_object_unref);
+					     g_free, g_object_unref);
 	self->siblings = g_hash_table_new_full (g_str_hash, g_str_equal,
 						g_free, (GDestroyNotify) g_ptr_array_unref);
 }

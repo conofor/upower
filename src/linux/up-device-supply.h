@@ -50,6 +50,13 @@ typedef struct
 GType		 up_device_supply_get_type	(void);
 
 UpDeviceState up_device_supply_get_state (GUdevDevice *native);
+UpDeviceState up_device_supply_state_from_status (const gchar *status);
+void		 up_device_supply_apply_initial_values	(UpDevice	*device,
+							 const gchar	*capacity,
+							 const gchar	*status,
+							 const gchar	*capacity_level,
+							 gboolean	has_present,
+							 gboolean	present);
 
 G_END_DECLS
 

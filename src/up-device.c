@@ -418,22 +418,25 @@ up_device_polkit_is_allowed (UpDevice *device, GDBusMethodInvocation *invocation
 	return TRUE;
 }
 
-static void
+static gboolean
 up_device_export_skeleton (UpDevice *device,
 			   const gchar *object_path)
 {
 	UpDevicePrivate *priv = up_device_get_instance_private (device);
 	GError *error = NULL;
+	gboolean ret;
 
-	g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (device),
-					  g_dbus_interface_skeleton_get_connection (G_DBUS_INTERFACE_SKELETON (priv->daemon)),
-					  object_path,
-					  &error);
+	ret = g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (device),
+						g_dbus_interface_skeleton_get_connection (G_DBUS_INTERFACE_SKELETON (priv->daemon)),
+						object_path,
+						&error);
 
 	if (error != NULL) {
 		g_critical ("error registering device on system bus: %s", error->message);
 		g_error_free (error);
 	}
+
+	return ret;
 }
 
 static gchar *
@@ -483,8 +486,9 @@ up_device_register (UpDevice *device)
 	if (g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (device)) != NULL)
 		return FALSE;
 	computed_object_path = up_device_compute_object_path (device);
-	g_debug ("Exported UpDevice with path %s", computed_object_path);
-	up_device_export_skeleton (device, computed_object_path);
+	g_debug ("Exporting UpDevice with path %s", computed_object_path);
+	if (!up_device_export_skeleton (device, computed_object_path))
+		return FALSE;
 	return TRUE;
 }
 
@@ -759,6 +763,28 @@ up_device_get_native (UpDevice *device)
 	UpDevicePrivate *priv = up_device_get_instance_private (device);
 	g_return_val_if_fail (UP_IS_DEVICE (device), NULL);
 	return priv->native;
+}
+
+/**
+ * up_device_update_native:
+ * @device: a #UpDevice
+ * @native: a newer snapshot of the same native device
+ *
+ * Replace the native device with a newer snapshot of the same sysfs
+ * device, e.g. one received through a uevent. This makes values carried
+ * by the uevent (such as POWER_SUPPLY_CAPACITY) visible to readers of
+ * the native object, without performing potentially blocking uncached
+ * sysfs reads.
+ **/
+void
+up_device_update_native (UpDevice *device, GObject *native)
+{
+	UpDevicePrivate *priv = up_device_get_instance_private (device);
+
+	g_return_if_fail (UP_IS_DEVICE (device));
+	g_return_if_fail (native == NULL || G_IS_OBJECT (native));
+
+	g_set_object (&priv->native, native);
 }
 
 const gchar *

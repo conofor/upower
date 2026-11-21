@@ -1084,6 +1084,15 @@ up_daemon_device_removed_cb (UpBackend *backend, UpDevice *device, UpDaemon *dae
 	g_debug ("emitting device-removed: %s", object_path);
 	up_exported_daemon_emit_device_removed (UP_EXPORTED_DAEMON (daemon), object_path);
 
+	/* Unexport the device so the object path becomes free again: the
+	 * skeleton used to be unexported only when the last object
+	 * reference was dropped, but the periodic read-values worker keeps
+	 * a reference to the device for a while after removal. Without
+	 * this, a replacement device (e.g. the same HID battery re-created
+	 * after a Bluetooth reconnect) fails to register at the same path
+	 * and clients keep seeing the stale exported object. */
+	up_device_unregister (device);
+
 	/* In case a battery was removed */
 	up_daemon_refresh_battery_devices (daemon);
 	up_daemon_update_warning_level (daemon);

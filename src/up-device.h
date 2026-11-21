@@ -62,6 +62,8 @@ UpDevice	*up_device_new			(UpDaemon	*daemon,
 
 UpDaemon	*up_device_get_daemon		(UpDevice	*device);
 GObject		*up_device_get_native		(UpDevice	*device);
+void		 up_device_update_native	(UpDevice	*device,
+						 GObject	*native);
 const gchar	*up_device_get_object_path	(UpDevice	*device);
 gboolean	 up_device_get_on_battery	(UpDevice	*device,
 						 gboolean	*on_battery);

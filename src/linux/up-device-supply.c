@@ -167,13 +167,37 @@ out:
 	return value;
 }
 
+static gchar *
+up_device_supply_prop_name (const gchar *key)
+{
+	return g_ascii_strup (g_strdup_printf ("POWER_SUPPLY_%s", key), -1);
+}
+
+/**
+ * up_device_supply_get_prop:
+ *
+ * Returns the value of a dynamic attribute as carried by the uevent,
+ * or %NULL when the uevent does not carry it (e.g. the attribute has no
+ * value yet, or the device was enumerated without an uevent).
+ *
+ * Reading some attributes of Bluetooth HID batteries from sysfs
+ * directly triggers synchronous HID I/O which can block for a very
+ * long time while the device is asleep, so for these devices the values
+ * must come from the uevent properties (which the kernel emits on every
+ * change) instead.
+ **/
+static const gchar *
+up_device_supply_get_prop (GUdevDevice *native, const gchar *key)
+{
+	g_autofree gchar *prop = up_device_supply_prop_name (key);
+	return g_udev_device_get_property (native, prop);
+}
+
 UpDeviceState
-up_device_supply_get_state (GUdevDevice *native)
+up_device_supply_state_from_status (const gchar *status)
 {
 	UpDeviceState state;
-	gchar *status;
 
-	status = up_device_supply_get_string (native, "status");
 	if (status == NULL ||
 	    g_ascii_strcasecmp (status, "unknown") == 0 ||
 	    *status == '\0') {
@@ -193,16 +217,27 @@ up_device_supply_get_state (GUdevDevice *native)
 		state = UP_DEVICE_STATE_UNKNOWN;
 	}
 
+	return state;
+}
+
+UpDeviceState
+up_device_supply_get_state (GUdevDevice *native)
+{
+	UpDeviceState state;
+	gchar *status;
+
+	status = up_device_supply_get_string (native, "status");
+	state = up_device_supply_state_from_status (status);
+
 	g_free (status);
 
 	return state;
 }
 
 static gdouble
-sysfs_get_capacity_level (GUdevDevice   *native,
-			  UpDeviceLevel *level)
+up_device_supply_capacity_level_from_str (const gchar   *str,
+					  UpDeviceLevel *level)
 {
-	char *str;
 	gdouble ret = -1.0;
 	guint i;
 	struct {
@@ -222,19 +257,7 @@ sysfs_get_capacity_level (GUdevDevice   *native,
 
 	g_return_val_if_fail (level != NULL, -1.0);
 
-	if (!g_udev_device_has_sysfs_attr_uncached (native, "capacity_level")) {
-		g_debug ("capacity_level doesn't exist, skipping");
-		*level = UP_DEVICE_LEVEL_NONE;
-		return -1.0;
-	}
-
 	*level = UP_DEVICE_LEVEL_UNKNOWN;
-	str = g_strchomp (g_strdup (g_udev_device_get_sysfs_attr_uncached (native, "capacity_level")));
-	if (!str) {
-		g_debug ("Failed to read capacity_level!");
-		return ret;
-	}
-
 	for (i = 0; i < G_N_ELEMENTS(levels); i++) {
 		if (strcmp (levels[i].str, str) == 0) {
 			ret = levels[i].percentage;
@@ -245,6 +268,33 @@ sysfs_get_capacity_level (GUdevDevice   *native,
 
 	if (ret < 0.0)
 		g_debug ("Could not find a percentage for capacity level '%s'", str);
+
+	return ret;
+}
+
+static gdouble
+sysfs_get_capacity_level (GUdevDevice   *native,
+			  UpDeviceLevel *level)
+{
+	char *str;
+	gdouble ret;
+
+	g_return_val_if_fail (level != NULL, -1.0);
+
+	if (!g_udev_device_has_sysfs_attr_uncached (native, "capacity_level")) {
+		g_debug ("capacity_level doesn't exist, skipping");
+		*level = UP_DEVICE_LEVEL_NONE;
+		return -1.0;
+	}
+
+	*level = UP_DEVICE_LEVEL_UNKNOWN;
+	str = g_strchomp (g_strdup (g_udev_device_get_sysfs_attr_uncached (native, "capacity_level")));
+	if (!str) {
+		g_debug ("Failed to read capacity_level!");
+		return -1.0;
+	}
+
+	ret = up_device_supply_capacity_level_from_str (str, level);
 
 	g_free (str);
 	return ret;
@@ -260,8 +310,12 @@ up_device_supply_refresh_device (UpDeviceSupply *supply,
 	gdouble percentage = 0.0f;
 	UpDeviceLevel level = UP_DEVICE_LEVEL_NONE;
 	gboolean is_present = TRUE;
+	gboolean is_power_supply;
 
 	native = G_UDEV_DEVICE (up_device_get_native (device));
+	g_object_get (device,
+		      "power-supply", &is_power_supply,
+		      NULL);
 
 	/* initial values */
 	if (!supply->priv->has_coldplug_values) {
@@ -289,6 +343,63 @@ up_device_supply_refresh_device (UpDeviceSupply *supply,
 
 		g_free (model_name);
 		g_free (serial_number);
+	}
+
+	/* Peripheral batteries (e.g. Bluetooth HID devices) must not be read
+	 * from sysfs directly: some of their attributes trigger synchronous
+	 * HID I/O which can block for a very long time while the device is
+	 * asleep. For these devices the values are taken from the uevent
+	 * properties instead (the kernel carries them on every change), or
+	 * from the asynchronous initial read performed by the enumerator. */
+	if (!is_power_supply) {
+		const gchar *capacity;
+		const gchar *capacity_level;
+		const gchar *present;
+		const gchar *status;
+
+		capacity = up_device_supply_get_prop (native, "capacity");
+		capacity_level = up_device_supply_get_prop (native, "capacity_level");
+		present = up_device_supply_get_prop (native, "present");
+		status = up_device_supply_get_prop (native, "status");
+
+		if (present != NULL)
+			is_present = (strcmp (present, "1") == 0);
+
+		/* No data has been received yet; keep the device as-is, the
+		 * values will arrive with a later uevent or through the
+		 * asynchronous initial read. */
+		if (capacity == NULL && capacity_level == NULL)
+			return FALSE;
+
+		if (capacity != NULL)
+			percentage = g_strtod (capacity, NULL);
+		else
+			percentage = up_device_supply_capacity_level_from_str (capacity_level, &level);
+
+		if (percentage < 0.0) {
+			state = UP_DEVICE_STATE_UNKNOWN;
+			g_object_set (device,
+				      "state", state,
+				      "is-present", is_present,
+				      NULL);
+			return FALSE;
+		}
+
+		state = up_device_supply_state_from_status (status);
+
+		/* Override whatever the device might have told us
+		 * because a number of them are always discharging */
+		if (percentage == 100.0)
+			state = UP_DEVICE_STATE_FULLY_CHARGED;
+
+		g_object_set (device,
+			      "percentage", percentage,
+			      "battery-level", level,
+			      "state", state,
+			      "is-present", is_present,
+			      NULL);
+
+		return TRUE;
 	}
 
 	/* Some devices change whether they're present or not */
@@ -325,6 +436,62 @@ up_device_supply_refresh_device (UpDeviceSupply *supply,
 		      NULL);
 
 	return TRUE;
+}
+
+/**
+ * up_device_supply_apply_initial_values:
+ * @device: a peripheral battery #UpDevice
+ * @capacity: (nullable): raw value of the capacity attribute
+ * @status: (nullable): raw value of the status attribute
+ * @capacity_level: (nullable): raw value of the capacity_level attribute
+ * @has_present: whether @present was readable
+ * @present: value of the present attribute
+ *
+ * Apply values which were read asynchronously (see the udev enumerator)
+ * to a peripheral battery device. This runs on the main thread; the
+ * potentially blocking sysfs reads happened on a worker thread.
+ **/
+void
+up_device_supply_apply_initial_values (UpDevice    *device,
+				       const gchar *capacity,
+				       const gchar *status,
+				       const gchar *capacity_level,
+				       gboolean     has_present,
+				       gboolean     present)
+{
+	gdouble percentage = 0.0f;
+	UpDeviceLevel level = UP_DEVICE_LEVEL_NONE;
+	UpDeviceState state;
+	gboolean is_present = TRUE;
+
+	if (has_present)
+		is_present = present;
+
+	if (capacity != NULL)
+		percentage = g_strtod (capacity, NULL);
+	else if (capacity_level != NULL)
+		percentage = up_device_supply_capacity_level_from_str (capacity_level, &level);
+
+	state = up_device_supply_state_from_status (status);
+	if (percentage == 100.0)
+		state = UP_DEVICE_STATE_FULLY_CHARGED;
+
+	if (percentage < 0.0) {
+		g_object_set (device,
+			      "state", state,
+			      "is-present", is_present,
+			      "update-time", (guint64) g_get_real_time () / G_USEC_PER_SEC,
+			      NULL);
+		return;
+	}
+
+	g_object_set (device,
+		      "percentage", percentage,
+		      "battery-level", level,
+		      "state", state,
+		      "is-present", is_present,
+		      "update-time", (guint64) g_get_real_time () / G_USEC_PER_SEC,
+		      NULL);
 }
 
 static void
@@ -611,13 +778,11 @@ up_device_supply_coldplug (UpDevice *device)
 		is_power_supply = TRUE;
 	}
 
-	/* we don't use separate ACs for devices */
-	if (is_power_supply == FALSE &&
-	    !g_udev_device_has_sysfs_attr_uncached (native, "capacity") &&
-	    !g_udev_device_has_sysfs_attr_uncached (native, "capacity_level")) {
-		g_debug ("Ignoring device AC, we'll monitor the device battery");
-		return FALSE;
-	}
+	/* Peripheral devices are always created: their dynamic values are
+	 * read from the uevent properties (see refresh_device), as reading
+	 * some attributes of Bluetooth HID batteries from sysfs triggers
+	 * synchronous HID I/O which can block for a very long time while
+	 * the device is asleep. */
 
 	/* try to detect using the device type */
 	type = up_device_supply_guess_type (native, native_path);
