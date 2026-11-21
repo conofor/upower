@@ -1,5 +1,18 @@
 # UPower
 
+> [!NOTE]
+> **About this tree** — the default branch, `fix/bluetooth-hid-battery`,
+> carries one fix on top of the upstream 1.90.9 release: upowerd reads
+> peripheral battery values (Bluetooth HID devices such as the Apple
+> Magic Keyboard) from a worker thread instead of blocking the daemon's
+> main loop on sysfs, so their charge actually shows up on the desktop.
+> See the [fix commit][fix] and the [project overview][overview]
+> (driver + bluez plugin + this fix).  The `master` branch mirrors
+> upstream upower unchanged.
+>
+> [fix]: https://github.com/conofor/upower/commit/40c48f93238ef48f5b7ca457e673698f9648d167
+> [overview]: https://github.com/conofor/hid-apple-bt-battery
+
 Requirements:
 
 ```text
